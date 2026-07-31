@@ -101,7 +101,7 @@ jobs:
         run: npx cordova build android --debug
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: acode-debug-apk
           path: platforms/android/app/build/outputs/apk/debug/*.apk
