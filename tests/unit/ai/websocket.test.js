@@ -54,9 +54,46 @@ class MockWebSocket {
 
 vi.stubGlobal("WebSocket", MockWebSocket);
 
+/** Helper: connect and simulate auth in one shot */
+async function connectWithAuth() {
+  const p = aiWebSocket.connect();
+  const ws = MockWebSocket._instances[0];
+  if (!ws) throw new Error("No MockWebSocket instance found");
+  ws._simulateOpen();
+  // Simulate auth response if auth token was set
+  if (ws._sent.length > 0) {
+    const sent = JSON.parse(ws._sent[0]);
+    if (sent.type === "auth") {
+      ws._simulateMessage({ type: "authenticated" });
+    }
+  }
+  await p;
+  // Small tick to let any microtasks settle
+  await new Promise(r => setTimeout(r, 0));
+}
+
 beforeEach(() => {
   MockWebSocket.reset();
   aiWebSocket.disconnect();
+  // Reset all internal state
+  aiWebSocket._authToken = null;
+  aiWebSocket._messageId = 0;
+  aiWebSocket._reconnectAttempts = 0;
+  aiWebSocket._shouldReconnect = false;
+  // Clear all listeners
+  [
+    aiWebSocket._messageListeners,
+    aiWebSocket._chunkListeners,
+    aiWebSocket._patchListeners,
+    aiWebSocket._errorListeners,
+    aiWebSocket._disconnectListeners,
+    aiWebSocket._connectListeners,
+  ].forEach((set) => set.clear());
+});
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
 describe("AIWebSocket", () => {
@@ -107,6 +144,50 @@ describe("AIWebSocket", () => {
     });
   });
 
+  describe("auth", () => {
+    it("sends auth message when token is set", async () => {
+      aiWebSocket.setAuthToken("test-token-123");
+      const p = aiWebSocket.connect();
+
+      const ws = MockWebSocket._instances[0];
+      ws._simulateOpen();
+
+      const sent = JSON.parse(ws._sent[0]);
+      expect(sent.type).toBe("auth");
+      expect(sent.token).toBe("test-token-123");
+    });
+
+    it("resolves after receiving authenticated response", async () => {
+      aiWebSocket.setAuthToken("test-token-123");
+      const p = aiWebSocket.connect();
+
+      const ws = MockWebSocket._instances[0];
+      ws._simulateOpen();
+      ws._simulateMessage({ type: "authenticated" });
+
+      await p;
+      expect(aiWebSocket.connected).toBe(true);
+    });
+
+    it("rejects on auth error response", async () => {
+      aiWebSocket.setAuthToken("bad-token");
+      const p = aiWebSocket.connect();
+
+      const ws = MockWebSocket._instances[0];
+      ws._simulateOpen();
+      ws._simulateMessage({ type: "error", message: "Authentication failed" });
+
+      await expect(p).rejects.toThrow("Authentication failed");
+    });
+
+    it("connects without auth when no token set", async () => {
+      const p = aiWebSocket.connect();
+      MockWebSocket._instances[0]._simulateOpen();
+      await p;
+      expect(aiWebSocket.connected).toBe(true);
+    });
+  });
+
   describe("disconnect()", () => {
     it("sets connected to false", async () => {
       const p = aiWebSocket.connect();
@@ -132,15 +213,14 @@ describe("AIWebSocket", () => {
 
   describe("send()", () => {
     it("sends JSON message with incremented ID", async () => {
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       aiWebSocket.send("prompt", { prompt: "hello" }).catch(() => {});
 
       const ws = MockWebSocket._instances[0];
-      expect(ws._sent.length).toBe(1);
-      const sent = JSON.parse(ws._sent[0]);
+      // First message is auth (if token set), prompt is second; or first if no auth
+      const lastSent = ws._sent[ws._sent.length - 1];
+      const sent = JSON.parse(lastSent);
       expect(sent.type).toBe("prompt");
       expect(sent.prompt).toBe("hello");
       expect(sent.id).toBeDefined();
@@ -151,14 +231,12 @@ describe("AIWebSocket", () => {
     });
 
     it("resolves when server responds with matching ID", async () => {
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       const responsePromise = aiWebSocket.send("test", {});
 
       const ws = MockWebSocket._instances[0];
-      const sent = JSON.parse(ws._sent[0]);
+      const sent = JSON.parse(ws._sent[ws._sent.length - 1]);
       ws._simulateMessage({ id: sent.id, type: "response", data: "ok" });
 
       const response = await responsePromise;
@@ -167,14 +245,12 @@ describe("AIWebSocket", () => {
     });
 
     it("rejects when server responds with error type", async () => {
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       const responsePromise = aiWebSocket.send("test", {});
 
       const ws = MockWebSocket._instances[0];
-      const sent = JSON.parse(ws._sent[0]);
+      const sent = JSON.parse(ws._sent[ws._sent.length - 1]);
       ws._simulateMessage({ id: sent.id, type: "error", message: "bad request" });
 
       await expect(responsePromise).rejects.toThrow("bad request");
@@ -183,14 +259,12 @@ describe("AIWebSocket", () => {
 
   describe("sendPrompt()", () => {
     it("sends prompt message type", async () => {
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       aiWebSocket.sendPrompt("hello world").catch(() => {});
 
       const ws = MockWebSocket._instances[0];
-      const sent = JSON.parse(ws._sent[0]);
+      const sent = JSON.parse(ws._sent[ws._sent.length - 1]);
       expect(sent.type).toBe("prompt");
       expect(sent.prompt).toBe("hello world");
     });
@@ -198,14 +272,12 @@ describe("AIWebSocket", () => {
 
   describe("connectBackend()", () => {
     it("sends connect message", async () => {
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       aiWebSocket.connectBackend({ model: "claude" }).catch(() => {});
 
       const ws = MockWebSocket._instances[0];
-      const sent = JSON.parse(ws._sent[0]);
+      const sent = JSON.parse(ws._sent[ws._sent.length - 1]);
       expect(sent.type).toBe("connect");
       expect(sent.options).toEqual({ model: "claude" });
     });
@@ -213,15 +285,13 @@ describe("AIWebSocket", () => {
 
   describe("applyPatch()", () => {
     it("sends apply_patch message", async () => {
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       const patchData = { file: "test.js", diff: "..." };
       aiWebSocket.applyPatch(patchData).catch(() => {});
 
       const ws = MockWebSocket._instances[0];
-      const sent = JSON.parse(ws._sent[0]);
+      const sent = JSON.parse(ws._sent[ws._sent.length - 1]);
       expect(sent.type).toBe("apply_patch");
       expect(sent.patch).toEqual(patchData);
     });
@@ -229,14 +299,12 @@ describe("AIWebSocket", () => {
 
   describe("rejectPatch()", () => {
     it("sends reject_patch message", async () => {
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       aiWebSocket.rejectPatch("patch-123").catch(() => {});
 
       const ws = MockWebSocket._instances[0];
-      const sent = JSON.parse(ws._sent[0]);
+      const sent = JSON.parse(ws._sent[ws._sent.length - 1]);
       expect(sent.type).toBe("reject_patch");
       expect(sent.patchId).toBe("patch-123");
     });
@@ -244,40 +312,34 @@ describe("AIWebSocket", () => {
 
   describe("cancel()", () => {
     it("sends cancel message", async () => {
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       aiWebSocket.cancel().catch(() => {});
 
       const ws = MockWebSocket._instances[0];
-      const sent = JSON.parse(ws._sent[0]);
+      const sent = JSON.parse(ws._sent[ws._sent.length - 1]);
       expect(sent.type).toBe("cancel");
     });
   });
 
   describe("disconnectBackend()", () => {
     it("sends disconnect message", async () => {
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       aiWebSocket.disconnectBackend().catch(() => {});
 
       const ws = MockWebSocket._instances[0];
-      const sent = JSON.parse(ws._sent[0]);
+      const sent = JSON.parse(ws._sent[ws._sent.length - 1]);
       expect(sent.type).toBe("disconnect");
     });
   });
 
-  describe("event callbacks", () => {
+  describe("event listeners (additive)", () => {
     it("calls onConnect when connected", async () => {
       const onConnect = vi.fn();
       aiWebSocket.onConnect(onConnect);
 
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       expect(onConnect).toHaveBeenCalledOnce();
     });
@@ -286,12 +348,9 @@ describe("AIWebSocket", () => {
       const onDisconnect = vi.fn();
       aiWebSocket.onDisconnect(onDisconnect);
 
-      const p = aiWebSocket.connect();
-      const ws = MockWebSocket._instances[0];
-      ws._simulateOpen();
-      await p;
+      await connectWithAuth();
 
-      ws._simulateClose();
+      MockWebSocket._instances[0]._simulateClose();
 
       expect(onDisconnect).toHaveBeenCalledOnce();
     });
@@ -300,9 +359,7 @@ describe("AIWebSocket", () => {
       const onMessage = vi.fn();
       aiWebSocket.onMessage(onMessage);
 
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       MockWebSocket._instances[0]._simulateMessage({ type: "text", content: "hello" });
 
@@ -313,9 +370,7 @@ describe("AIWebSocket", () => {
       const onChunk = vi.fn();
       aiWebSocket.onChunk(onChunk);
 
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       MockWebSocket._instances[0]._simulateMessage({ type: "streaming", content: "chunk" });
 
@@ -326,9 +381,7 @@ describe("AIWebSocket", () => {
       const onPatch = vi.fn();
       aiWebSocket.onPatch(onPatch);
 
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       MockWebSocket._instances[0]._simulateMessage({ type: "patch_applied", id: "1" });
 
@@ -346,6 +399,36 @@ describe("AIWebSocket", () => {
 
       expect(onError).toHaveBeenCalledOnce();
     });
+
+    it("supports multiple listeners on the same event", async () => {
+      const cb1 = vi.fn();
+      const cb2 = vi.fn();
+      aiWebSocket.onMessage(cb1);
+      aiWebSocket.onMessage(cb2);
+
+      await connectWithAuth();
+
+      MockWebSocket._instances[0]._simulateMessage({ type: "text", content: "hi" });
+
+      expect(cb1).toHaveBeenCalledOnce();
+      expect(cb2).toHaveBeenCalledOnce();
+    });
+
+    it("offMessage removes specific listener", async () => {
+      const cb1 = vi.fn();
+      const cb2 = vi.fn();
+      aiWebSocket.onMessage(cb1);
+      aiWebSocket.onMessage(cb2);
+
+      aiWebSocket.offMessage(cb1);
+
+      await connectWithAuth();
+
+      MockWebSocket._instances[0]._simulateMessage({ type: "text", content: "hi" });
+
+      expect(cb1).not.toHaveBeenCalled();
+      expect(cb2).toHaveBeenCalledOnce();
+    });
   });
 
   describe("message routing", () => {
@@ -353,9 +436,7 @@ describe("AIWebSocket", () => {
       const onMessage = vi.fn();
       aiWebSocket.onMessage(onMessage);
 
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       MockWebSocket._instances[0]._simulateMessage({ type: "tool_call", name: "readFile" });
 
@@ -366,9 +447,7 @@ describe("AIWebSocket", () => {
       const onMessage = vi.fn();
       aiWebSocket.onMessage(onMessage);
 
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       MockWebSocket._instances[0]._simulateMessage({ type: "error", message: "oops" });
 
@@ -379,9 +458,7 @@ describe("AIWebSocket", () => {
       const onMessage = vi.fn();
       aiWebSocket.onMessage(onMessage);
 
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       MockWebSocket._instances[0]._simulateMessage({ type: "patch", raw: "diff" });
 
@@ -392,9 +469,7 @@ describe("AIWebSocket", () => {
       const onMessage = vi.fn();
       aiWebSocket.onMessage(onMessage);
 
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       MockWebSocket._instances[0]._simulateMessage({ type: "custom_type" });
 
@@ -404,9 +479,7 @@ describe("AIWebSocket", () => {
 
   describe("pending request cleanup", () => {
     it("rejects all pending requests on disconnect", async () => {
-      const p = aiWebSocket.connect();
-      MockWebSocket._instances[0]._simulateOpen();
-      await p;
+      await connectWithAuth();
 
       const promise1 = aiWebSocket.send("test1", {}).catch(() => {});
       const promise2 = aiWebSocket.send("test2", {}).catch(() => {});
@@ -414,6 +487,72 @@ describe("AIWebSocket", () => {
       aiWebSocket.disconnect();
 
       await Promise.all([promise1, promise2]);
+    });
+
+    it("clears timeout on successful response", async () => {
+      await connectWithAuth();
+
+      vi.useFakeTimers();
+
+      const promise = aiWebSocket.send("test", {});
+      const ws = MockWebSocket._instances[0];
+      const sent = JSON.parse(ws._sent[ws._sent.length - 1]);
+
+      // Respond before timeout
+      ws._simulateMessage({ id: sent.id, type: "response", ok: true });
+
+      const result = await promise;
+      expect(result.ok).toBe(true);
+
+      // Advance past the 5-minute timeout — should not error
+      vi.advanceTimersByTime(310000);
+    });
+  });
+
+  describe("reconnect", () => {
+    it("schedules reconnect after disconnection", async () => {
+      await connectWithAuth();
+
+      vi.useFakeTimers();
+
+      // Drop connection
+      MockWebSocket._instances[0]._simulateClose();
+
+      expect(aiWebSocket.connected).toBe(false);
+
+      // Advance past reconnect delay (1s * 2^0 = 1000ms)
+      vi.advanceTimersByTime(1100);
+
+      // Should have attempted reconnection
+      expect(MockWebSocket._instances.length).toBe(2);
+    });
+
+    it("does not reconnect when disconnect() is called explicitly", async () => {
+      await connectWithAuth();
+
+      vi.useFakeTimers();
+
+      aiWebSocket.disconnect();
+      vi.advanceTimersByTime(5000);
+
+      expect(MockWebSocket._instances.length).toBe(1);
+    });
+
+    it("resets reconnect attempts on successful connection", async () => {
+      await connectWithAuth();
+
+      vi.useFakeTimers();
+
+      // Drop and reconnect once
+      MockWebSocket._instances[0]._simulateClose();
+      vi.advanceTimersByTime(1100);
+
+      const ws2 = MockWebSocket._instances[1];
+      ws2._simulateOpen();
+
+      // _onConnected runs synchronously in _simulateOpen, so _reconnectAttempts
+      // should already be reset. No need to await.
+      expect(aiWebSocket._reconnectAttempts).toBe(0);
     });
   });
 });

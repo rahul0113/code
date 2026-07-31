@@ -8,6 +8,8 @@
 import toast from "src/components/toast";
 import aiWebSocket from "src/ai/websocket";
 
+const INPUT_MAX_LENGTH = 32768;
+
 class AIChat {
 	constructor() {
 		/** @type {HTMLElement|null} */
@@ -26,10 +28,28 @@ class AIChat {
 		this._messages = [];
 		/** @type {boolean} */
 		this._processing = false;
+		/** @type {number} */
+		this._generation = 0;
 
 		this._handleSend = this._handleSend.bind(this);
 		this._handleCancel = this._handleCancel.bind(this);
 		this._handleKeydown = this._handleKeydown.bind(this);
+
+		// Bind WebSocket handlers for proper cleanup
+		this._onMessage = (msg) => this._handleServerMessage(msg);
+		this._onChunk = (msg) => this._handleChunk(msg);
+		this._onPatch = (msg) => this._handlePatch(msg);
+		this._onError = () => {
+			this._setProcessing(false);
+			toast("Connection error", 3000);
+		};
+		this._onDisconnect = () => {
+			this._setProcessing(false);
+			this._updateStatus("disconnected");
+		};
+		this._onConnect = () => {
+			this._updateStatus("connected");
+		};
 	}
 
 	/**
@@ -38,6 +58,7 @@ class AIChat {
 	 * @returns {Function} cleanup function
 	 */
 	create(container) {
+		const gen = ++this._generation;
 		this._el = container;
 		container.classList.add("ai-chat");
 
@@ -64,6 +85,7 @@ class AIChat {
 				className="ai-chat__input"
 				placeholder="Ask about your code..."
 				rows="3"
+				maxLength={INPUT_MAX_LENGTH}
 			/>
 		);
 
@@ -92,32 +114,46 @@ class AIChat {
 		this._cancelBtn.addEventListener("click", this._handleCancel);
 		this._inputEl.addEventListener("keydown", this._handleKeydown);
 
-		// WebSocket callbacks
-		aiWebSocket.onMessage((msg) => this._handleServerMessage(msg));
-		aiWebSocket.onChunk((msg) => this._handleChunk(msg));
-		aiWebSocket.onPatch((msg) => this._handlePatch(msg));
-		aiWebSocket.onError(() => {
-			this._setProcessing(false);
-			toast("Connection error", 3000);
-		});
-		aiWebSocket.onDisconnect(() => {
-			this._setProcessing(false);
-			this._updateStatus("disconnected");
-		});
-		aiWebSocket.onConnect(() => {
-			this._updateStatus("connected");
-		});
+		// WebSocket callbacks (additive — won't overwrite other consumers)
+		aiWebSocket.onMessage(this._onMessage);
+		aiWebSocket.onChunk(this._onChunk);
+		aiWebSocket.onPatch(this._onPatch);
+		aiWebSocket.onError(this._onError);
+		aiWebSocket.onDisconnect(this._onDisconnect);
+		aiWebSocket.onConnect(this._onConnect);
 
 		// Auto-connect
 		aiWebSocket.connect()
-			.then(() => aiWebSocket.connectBackend())
+			.then(() => {
+				if (this._generation !== gen) return;
+				aiWebSocket.connectBackend();
+			})
 			.catch(() => {});
 
 		return () => {
+			// Only clean up if this generation is still active
+			if (this._generation !== gen) return;
+
 			this._sendBtn.removeEventListener("click", this._handleSend);
 			this._cancelBtn.removeEventListener("click", this._handleCancel);
 			this._inputEl.removeEventListener("keydown", this._handleKeydown);
+
+			aiWebSocket.offMessage(this._onMessage);
+			aiWebSocket.offChunk(this._onChunk);
+			aiWebSocket.offPatch(this._onPatch);
+			aiWebSocket.offError(this._onError);
+			aiWebSocket.offDisconnect(this._onDisconnect);
+			aiWebSocket.offConnect(this._onConnect);
+
 			aiWebSocket.disconnect();
+
+			this._el = null;
+			this._messagesEl = null;
+			this._inputEl = null;
+			this._sendBtn = null;
+			this._cancelBtn = null;
+			this._streamingEl = null;
+			this._messages = [];
 		};
 	}
 
@@ -125,7 +161,7 @@ class AIChat {
 	 * Handle sending a message.
 	 */
 	async _handleSend() {
-		const text = this._inputEl.value.trim();
+		const text = this._inputEl?.value.trim();
 		if (!text || this._processing) return;
 
 		// Connect if not connected
@@ -139,7 +175,7 @@ class AIChat {
 			}
 		}
 
-		this._inputEl.value = "";
+		if (this._inputEl) this._inputEl.value = "";
 		this._addMessage("user", text);
 		this._setProcessing(true);
 		this._createStreamingMessage();
@@ -163,6 +199,7 @@ class AIChat {
 		} catch {
 			// ignore
 		}
+		this._removeStreamingMessage();
 		this._setProcessing(false);
 	}
 
@@ -173,7 +210,7 @@ class AIChat {
 	_handleKeydown(e) {
 		if (e.key === "Enter" && !e.shiftKey) {
 			e.preventDefault();
-			this._handleSend();
+			this._handleSend().catch(() => {});
 		}
 	}
 
@@ -184,7 +221,7 @@ class AIChat {
 	 */
 	_addMessage(role, content) {
 		// Remove welcome message
-		const welcome = this._messagesEl.querySelector(".ai-chat__welcome");
+		const welcome = this._messagesEl?.querySelector(".ai-chat__welcome");
 		if (welcome) welcome.remove();
 
 		const msg = { role, content, timestamp: Date.now() };
@@ -193,7 +230,7 @@ class AIChat {
 		const el = <div className={`ai-chat__message ai-chat__message--${role}`}>
 			<div className="ai-chat__message-content md">{content}</div>
 		</div>;
-		this._messagesEl.appendChild(el);
+		this._messagesEl?.appendChild(el);
 		this._scrollToBottom();
 	}
 
@@ -201,6 +238,7 @@ class AIChat {
 	 * Create a streaming message placeholder for AI response.
 	 */
 	_createStreamingMessage() {
+		this._removeStreamingMessage();
 		this._streamingEl = <div className="ai-chat__message ai-chat__message--assistant ai-chat__message--streaming">
 			<div className="ai-chat__message-content md">
 				<div className="ai-chat__typing-indicator">
@@ -208,7 +246,7 @@ class AIChat {
 				</div>
 			</div>
 		</div>;
-		this._messagesEl.appendChild(this._streamingEl);
+		this._messagesEl?.appendChild(this._streamingEl);
 		this._scrollToBottom();
 	}
 
@@ -295,6 +333,11 @@ class AIChat {
 	_finalizeStreaming() {
 		if (!this._streamingEl) return;
 		const contentEl = this._streamingEl.querySelector(".ai-chat__message-content");
+
+		// Remove typing indicator before extracting content
+		const typing = contentEl?.querySelector(".ai-chat__typing-indicator");
+		if (typing) typing.remove();
+
 		const content = contentEl?.textContent || "";
 
 		this._streamingEl.classList.remove("ai-chat__message--streaming");
@@ -354,5 +397,3 @@ class AIChat {
 		}
 	}
 }
-
-export default AIChat;

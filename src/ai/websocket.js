@@ -3,7 +3,7 @@
  *
  * Connects to the backend WebSocket server running on localhost:9876.
  * Handles connect/disconnect, message correlation, auto-reconnect,
- * and health pings.
+ * authentication, and health pings.
  */
 
 const WS_PORT = 9876;
@@ -16,25 +16,42 @@ class AIWebSocket {
 	constructor() {
 		/** @type {WebSocket|null} */
 		this._ws = null;
-		/** @type {Map<string, {resolve: Function, reject: Function}>} */
+		/** @type {Map<string, {resolve: Function, reject: Function, timer: number}>} */
 		this._pendingRequests = new Map();
 		this._messageId = 0;
 		this._pingInterval = null;
+		this._reconnectTimer = null;
 		this._reconnectAttempts = 0;
 		this._shouldReconnect = false;
 		this._connected = false;
+		this._authenticated = false;
+		this._authToken = null;
 
-		// Event callbacks
-		this._onMessage = null;
-		this._onChunk = null;
-		this._onPatch = null;
-		this._onError = null;
-		this._onDisconnect = null;
-		this._onConnect = null;
+		// Event listeners (additive, not overwriting)
+		/** @type {Set<(msg: object) => void>} */
+		this._messageListeners = new Set();
+		/** @type {Set<(chunk: object) => void>} */
+		this._chunkListeners = new Set();
+		/** @type {Set<(patch: object) => void>} */
+		this._patchListeners = new Set();
+		/** @type {Set<(err: Event) => void>} */
+		this._errorListeners = new Set();
+		/** @type {Set<() => void>} */
+		this._disconnectListeners = new Set();
+		/** @type {Set<() => void>} */
+		this._connectListeners = new Set();
 	}
 
 	get connected() {
 		return this._connected;
+	}
+
+	/**
+	 * Set the authentication token (obtained from server handshake or config).
+	 * @param {string} token
+	 */
+	setAuthToken(token) {
+		this._authToken = token;
 	}
 
 	/**
@@ -69,13 +86,13 @@ class AIWebSocket {
 			this._ws.onopen = () => {
 				clearTimeout(timeout);
 				if (settled) return;
-				settled = true;
 
-				this._connected = true;
-				this._reconnectAttempts = 0;
-				this._startPing();
-				this._onConnect?.();
-				resolve();
+				if (this._authToken) {
+					this._ws.send(JSON.stringify({ type: "auth", token: this._authToken }));
+				} else {
+					settled = true;
+					this._onConnected(resolve);
+				}
 			};
 
 			this._ws.onerror = (event) => {
@@ -84,32 +101,63 @@ class AIWebSocket {
 					settled = true;
 					reject(new Error("WebSocket connection failed"));
 				}
-				this._onError?.(event);
+				this._emitError(event);
 			};
 
 			this._ws.onclose = () => {
 				clearTimeout(timeout);
 				const wasConnected = this._connected;
 				this._connected = false;
+				this._authenticated = false;
 				this._stopPing();
-				this._rejectAllPending("Connection closed");
-
-				if (wasConnected) {
-					this._onDisconnect?.();
-				}
 
 				if (!settled) {
 					settled = true;
+					this._rejectAllPending("Connection closed");
 					reject(new Error("Connection closed before opening"));
+					this._scheduleReconnect();
+				} else if (wasConnected) {
+					this._rejectAllPending("Connection closed");
+					this._emitDisconnect();
+					this._scheduleReconnect();
 				}
-
-				this._scheduleReconnect();
 			};
 
 			this._ws.onmessage = (event) => {
+				if (!settled && this._authToken) {
+					this._handleAuthMessage(event.data, resolve, (err) => {
+						settled = true;
+						reject(err);
+					});
+					return;
+				}
 				this._handleMessage(event.data);
 			};
 		});
+	}
+
+	_onConnected(resolve) {
+		this._connected = true;
+		this._authenticated = true;
+		this._reconnectAttempts = 0;
+		this._startPing();
+		this._emitConnect();
+		if (resolve) resolve();
+	}
+
+	_handleAuthMessage(raw, resolve, rejectFn) {
+		let msg;
+		try {
+			msg = JSON.parse(raw);
+		} catch {
+			return;
+		}
+
+		if (msg.type === "authenticated") {
+			this._onConnected(resolve);
+		} else if (msg.type === "error") {
+			rejectFn(new Error(msg.message || "Authentication failed"));
+		}
 	}
 
 	/**
@@ -118,6 +166,7 @@ class AIWebSocket {
 	disconnect() {
 		this._shouldReconnect = false;
 		this._stopPing();
+		this._clearReconnectTimer();
 		this._rejectAllPending("Disconnected");
 		if (this._ws) {
 			this._ws.onclose = null;
@@ -125,6 +174,7 @@ class AIWebSocket {
 			this._ws = null;
 		}
 		this._connected = false;
+		this._authenticated = false;
 	}
 
 	/**
@@ -142,16 +192,15 @@ class AIWebSocket {
 		const message = { id, type, ...payload };
 
 		return new Promise((resolve, reject) => {
-			this._pendingRequests.set(id, { resolve, reject });
-			this._ws.send(JSON.stringify(message));
-
-			// Timeout pending requests after 5 minutes
-			setTimeout(() => {
+			const timer = setTimeout(() => {
 				if (this._pendingRequests.has(id)) {
 					this._pendingRequests.delete(id);
 					reject(new Error("Request timed out"));
 				}
 			}, 300000);
+
+			this._pendingRequests.set(id, { resolve, reject, timer });
+			this._ws.send(JSON.stringify(message));
 		});
 	}
 
@@ -207,20 +256,42 @@ class AIWebSocket {
 		return this.send("disconnect");
 	}
 
-	// ── Event registration ────────────────────────────────────────
+	// ── Event registration (additive) ────────────────────────────
 
 	/** @param {(msg: object) => void} cb */
-	onMessage(cb) { this._onMessage = cb; }
+	onMessage(cb) { this._messageListeners.add(cb); }
 	/** @param {(chunk: object) => void} cb */
-	onChunk(cb) { this._onChunk = cb; }
+	onChunk(cb) { this._chunkListeners.add(cb); }
 	/** @param {(patch: object) => void} cb */
-	onPatch(cb) { this._onPatch = cb; }
+	onPatch(cb) { this._patchListeners.add(cb); }
 	/** @param {(err: Event) => void} cb */
-	onError(cb) { this._onError = cb; }
+	onError(cb) { this._errorListeners.add(cb); }
 	/** @param {() => void} cb */
-	onDisconnect(cb) { this._onDisconnect = cb; }
+	onDisconnect(cb) { this._disconnectListeners.add(cb); }
 	/** @param {() => void} cb */
-	onConnect(cb) { this._onConnect = cb; }
+	onConnect(cb) { this._connectListeners.add(cb); }
+
+	/** @param {(msg: object) => void} cb */
+	offMessage(cb) { this._messageListeners.delete(cb); }
+	/** @param {(chunk: object) => void} cb */
+	offChunk(cb) { this._chunkListeners.delete(cb); }
+	/** @param {(patch: object) => void} cb */
+	offPatch(cb) { this._patchListeners.delete(cb); }
+	/** @param {(err: Event) => void} cb */
+	offError(cb) { this._errorListeners.delete(cb); }
+	/** @param {() => void} cb */
+	offDisconnect(cb) { this._disconnectListeners.delete(cb); }
+	/** @param {() => void} cb */
+	offConnect(cb) { this._connectListeners.delete(cb); }
+
+	// ── Emit helpers ──────────────────────────────────────────────
+
+	_emitMessage(msg) { for (const cb of this._messageListeners) cb(msg); }
+	_emitChunk(chunk) { for (const cb of this._chunkListeners) cb(chunk); }
+	_emitPatch(patch) { for (const cb of this._patchListeners) cb(patch); }
+	_emitError(err) { for (const cb of this._errorListeners) cb(err); }
+	_emitDisconnect() { for (const cb of this._disconnectListeners) cb(); }
+	_emitConnect() { for (const cb of this._connectListeners) cb(); }
 
 	// ── Internal ──────────────────────────────────────────────────
 
@@ -238,7 +309,8 @@ class AIWebSocket {
 
 		// Resolve pending request if ID matches
 		if (msg.id && this._pendingRequests.has(msg.id)) {
-			const { resolve, reject } = this._pendingRequests.get(msg.id);
+			const { resolve, reject, timer } = this._pendingRequests.get(msg.id);
+			clearTimeout(timer);
 			this._pendingRequests.delete(msg.id);
 			if (msg.type === "error") {
 				reject(new Error(msg.message));
@@ -254,17 +326,17 @@ class AIWebSocket {
 			case "tool_call":
 			case "patch":
 			case "error":
-				this._onMessage?.(msg);
+				this._emitMessage(msg);
 				break;
 			case "streaming":
-				this._onChunk?.(msg);
+				this._emitChunk(msg);
 				break;
 			case "patch_applied":
 			case "patch_rejected":
-				this._onPatch?.(msg);
+				this._emitPatch(msg);
 				break;
 			default:
-				this._onMessage?.(msg);
+				this._emitMessage(msg);
 		}
 	}
 
@@ -285,14 +357,24 @@ class AIWebSocket {
 	}
 
 	_rejectAllPending(reason) {
-		for (const [id, { reject }] of this._pendingRequests) {
+		for (const [id, { reject, timer }] of this._pendingRequests) {
+			clearTimeout(timer);
 			reject(new Error(reason));
 		}
 		this._pendingRequests.clear();
 	}
 
+	_clearReconnectTimer() {
+		if (this._reconnectTimer) {
+			clearTimeout(this._reconnectTimer);
+			this._reconnectTimer = null;
+		}
+	}
+
 	_scheduleReconnect() {
 		if (!this._shouldReconnect) return;
+
+		this._clearReconnectTimer();
 
 		const delay = Math.min(
 			RECONNECT_BASE_MS * Math.pow(2, this._reconnectAttempts),
@@ -300,7 +382,8 @@ class AIWebSocket {
 		);
 		this._reconnectAttempts++;
 
-		setTimeout(() => {
+		this._reconnectTimer = setTimeout(() => {
+			this._reconnectTimer = null;
 			if (this._shouldReconnect && !this._connected) {
 				this.connect().catch(() => {});
 			}

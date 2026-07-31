@@ -32,8 +32,9 @@ describe("ContextCollector", () => {
       files: [{ relativePath: "src/index.js", content: "console.log('hi');" }],
     };
     const formatted = collector.formatContext(context);
-    expect(formatted).toContain("Project structure:");
+    expect(formatted).toContain("<project-structure>");
     expect(formatted).toContain("src/index.js");
+    expect(formatted).toContain('<file path="src/index.js">');
   });
 
   it("formats context with empty tree", () => {

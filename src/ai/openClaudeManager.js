@@ -10,6 +10,12 @@ const { parseCliOutput } = require("../lib/claude/cliParser");
 
 const CLAUDE_CMD = "claude";
 const CLAUDE_ARGS = ["--output-format", "stream-json"];
+const ALLOWED_CWDS = ["/public", "/home", "/root"];
+
+function isCwdAllowed(cwd) {
+	if (!cwd) return false;
+	return ALLOWED_CWDS.some((allowed) => cwd === allowed || cwd.startsWith(allowed + "/"));
+}
 
 class OpenClaudeManager {
   constructor() {
@@ -34,12 +40,18 @@ class OpenClaudeManager {
       args.push("--max-tokens", String(options.maxTokens));
     }
 
+    const cwd = options.cwd || "/public";
+    if (!isCwdAllowed(cwd)) {
+      throw new Error("Cwd not in allowlist");
+    }
+
     this.process = spawn(CLAUDE_CMD, args, {
       env: {
-        ...process.env,
         HOME: "/public",
+        PATH: process.env.PATH || "/usr/local/bin:/usr/bin:/bin",
+        LANG: process.env.LANG || "en_US.UTF-8",
       },
-      cwd: options.cwd || "/public",
+      cwd,
     });
 
     this.outputBuffer = "";

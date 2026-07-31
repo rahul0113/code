@@ -7,6 +7,17 @@
 
 const fs = require("fs");
 const path = require("path");
+const { isPathSafe } = require("../lib/claude/storage");
+
+const ALLOWED_ROOTS = ["/public", "/home", "/root"];
+
+function isPathWithinWorkspace(filePath) {
+	if (!filePath || typeof filePath !== "string") return false;
+	const normalized = path.resolve(filePath);
+	return ALLOWED_ROOTS.some(
+		(root) => normalized === root || normalized.startsWith(root + "/"),
+	);
+}
 
 class PatchManager {
   constructor() {
@@ -21,8 +32,17 @@ class PatchManager {
   apply(patch) {
     const { filePath, old, new: newContent } = patch;
 
-    if (!filePath || newContent === undefined) {
+    if (!filePath || typeof filePath !== "string" || newContent === undefined) {
       return { success: false, filePath, error: "Invalid patch: missing filePath or new content" };
+    }
+
+    if (!isPathWithinWorkspace(filePath)) {
+      return { success: false, filePath, error: "Path is outside allowed workspace" };
+    }
+
+    const pathCheck = isPathSafe(filePath);
+    if (!pathCheck.safe) {
+      return { success: false, filePath, error: pathCheck.reason };
     }
 
     try {
@@ -40,7 +60,7 @@ class PatchManager {
             error: "Original content not found in file. File may have been modified.",
           };
         }
-        const updated = current.replace(old, newContent);
+        const updated = current.replaceAll(old, newContent);
         fs.writeFileSync(filePath, updated, "utf8");
       } else {
         fs.writeFileSync(filePath, newContent, "utf8");

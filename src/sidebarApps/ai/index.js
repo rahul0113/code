@@ -26,7 +26,11 @@ export default [
  */
 function initApp(el) {
 	chat = new AIChat();
-	return chat.create(el);
+	const cleanup = chat.create(el);
+	return () => {
+		cleanup();
+		chat = null;
+	};
 }
 
 /**

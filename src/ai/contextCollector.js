@@ -25,6 +25,10 @@ class ContextCollector {
   collect(targetPath) {
     const absolutePath = path.resolve(this.rootDir, targetPath);
 
+    if (!absolutePath.startsWith(this.rootDir)) {
+      return { files: [], tree: "" };
+    }
+
     if (!fs.existsSync(absolutePath)) {
       return { files: [], tree: "" };
     }
@@ -69,6 +73,8 @@ class ContextCollector {
         if (files.length >= 20) break;
 
         const fullPath = path.join(dir, entry.name);
+
+        if (!fullPath.startsWith(this.rootDir)) continue;
 
         if (entry.isDirectory()) {
           if (IGNORE_DIRS.includes(entry.name)) continue;
@@ -137,11 +143,11 @@ class ContextCollector {
     const parts = [];
 
     if (context.tree) {
-      parts.push("Project structure:\n" + context.tree);
+      parts.push("<project-structure>\n" + context.tree + "\n</project-structure>");
     }
 
     for (const file of context.files) {
-      parts.push(`--- ${file.relativePath} ---\n${file.content}`);
+      parts.push(`<file path="${file.relativePath}">\n${file.content}\n</file>`);
     }
 
     return parts.join("\n\n");

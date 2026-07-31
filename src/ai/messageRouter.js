@@ -75,22 +75,42 @@ function createMessageRouter({ openClaude, patchManager }) {
 
   async function waitForProcessComplete(manager, ws) {
     return new Promise((resolve, reject) => {
-      const checkInterval = setInterval(() => {
-        if (!manager.isRunning()) {
-          clearInterval(checkInterval);
-          const messages = manager.parseBufferedOutput();
-          for (const msg of messages) {
-            ws.send(JSON.stringify(msg));
-          }
-          ws.send(JSON.stringify({ type: "streaming", status: "complete" }));
-          resolve();
-        }
-      }, 100);
+      let settled = false;
 
-      setTimeout(() => {
-        clearInterval(checkInterval);
-        reject(new Error("Timed out waiting for response"));
+      const timeout = setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          manager.kill();
+          reject(new Error("Timed out waiting for response"));
+        }
       }, 300000);
+
+      const onExit = () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+
+        const messages = manager.parseBufferedOutput();
+        for (const msg of messages) {
+          ws.send(JSON.stringify(msg));
+        }
+        ws.send(JSON.stringify({ type: "streaming", status: "complete" }));
+        resolve();
+      };
+
+      if (manager.process) {
+        manager.process.once("exit", onExit);
+        manager.process.once("error", (err) => {
+          if (!settled) {
+            settled = true;
+            clearTimeout(timeout);
+            reject(err);
+          }
+        });
+      } else {
+        clearTimeout(timeout);
+        reject(new Error("No process to wait for"));
+      }
     });
   }
 

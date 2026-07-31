@@ -5,6 +5,7 @@
  * Bridges Acode WebView ↔ OpenClaude CLI via WebSocket.
  */
 
+const crypto = require("crypto");
 const WebSocket = require("ws");
 const { createMessageRouter } = require("./messageRouter");
 const { OpenClaudeManager } = require("./openClaudeManager");
@@ -17,6 +18,7 @@ class AIServer {
     this.port = options.port || DEFAULT_PORT;
     this.wss = null;
     this.clients = new Set();
+    this.authToken = crypto.randomBytes(32).toString("hex");
     this.openClaude = new OpenClaudeManager();
     this.patchManager = new PatchManager();
     this.router = createMessageRouter({
@@ -28,7 +30,7 @@ class AIServer {
   start() {
     return new Promise((resolve, reject) => {
       try {
-        this.wss = new WebSocket.Server({ port: this.port });
+        this.wss = new WebSocket.Server({ port: this.port, maxPayload: 2 * 1024 * 1024 });
 
         this.wss.on("connection", (ws) => {
           this._handleConnection(ws);
@@ -63,28 +65,61 @@ class AIServer {
   }
 
   _handleConnection(ws) {
-    this.clients.add(ws);
-    console.log(`[AIServer] Client connected (${this.clients.size} total)`);
+    let authenticated = false;
+    const authTimeout = setTimeout(() => {
+      if (!authenticated) {
+        ws.close(4001, "Authentication timeout");
+      }
+    }, 5000);
+
+    ws.on("error", (err) => {
+      console.error("[AIServer] Socket error:", err.message);
+    });
 
     ws.on("message", async (data) => {
+      let message;
       try {
-        const message = JSON.parse(data.toString());
+        message = JSON.parse(data.toString());
+      } catch {
+        ws.send(JSON.stringify({ type: "error", message: "Invalid JSON" }));
+        return;
+      }
+
+      if (!authenticated) {
+        clearTimeout(authTimeout);
+        if (message.type !== "auth" || message.token !== this.authToken) {
+          ws.send(JSON.stringify({ type: "error", message: "Authentication required" }));
+          ws.close(4003, "Unauthorized");
+          return;
+        }
+        authenticated = true;
+        this.clients.add(ws);
+        console.log(`[AIServer] Client authenticated (${this.clients.size} total)`);
+        ws.send(JSON.stringify({ type: "authenticated" }));
+        return;
+      }
+
+      if (!message.type || typeof message.type !== "string") {
+        ws.send(JSON.stringify({ type: "error", message: "Missing or invalid message type" }));
+        return;
+      }
+
+      try {
         await this.router.handleMessage(ws, message);
       } catch (err) {
         console.error("[AIServer] Failed to handle message:", err.message);
         ws.send(JSON.stringify({
           type: "error",
-          message: err.message,
+          message: "Internal server error",
         }));
       }
     });
 
     ws.on("close", () => {
+      clearTimeout(authTimeout);
       this.clients.delete(ws);
       console.log(`[AIServer] Client disconnected (${this.clients.size} remaining)`);
     });
-
-    ws.send(JSON.stringify({ type: "connected", version: "1.0.0" }));
   }
 }
 

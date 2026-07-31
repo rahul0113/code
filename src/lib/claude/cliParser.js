@@ -29,7 +29,7 @@ const fs = require("fs");
 const TOOL_CALL_START = /<tool_use>/;
 const TOOL_CALL_END = /<\/tool_use>/;
 const TOOL_NAME = /<name>(.*?)<\/name>/;
-const TOOL_INPUT = /<input>([\s\S]*?)<\/input>/;
+const TOOL_INPUT = /<input>([^]*?)<\/input>/;
 
 /**
  * Detect unified diff patches in code blocks.
