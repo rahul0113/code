@@ -1,0 +1,20 @@
+{
+  "name": "com.foxdebug.acode.claude",
+  "version": "0.1.0",
+  "description": "Acode integration for OpenClaude AI coding assistant",
+  "cordova": {
+    "id": "com.foxdebug.acode.claude",
+    "platforms": [
+      "android"
+    ]
+  },
+  "keywords": [
+    "ecosystem:cordova",
+    "cordova-android",
+    "ai",
+    "claude",
+    "openclaude"
+  ],
+  "author": "Acode Foundation",
+  "license": "MIT"
+}
