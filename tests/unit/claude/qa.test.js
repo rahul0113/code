@@ -1,9 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import fs from "fs";
 import path from "path";
 import { parseCliOutput } from "lib/claude/cliParser.js";
 import * as storage from "lib/claude/storage.js";
-import Claude from "plugins/claude/www/Claude.js";
+
+vi.mock("cordova/exec", () => ({ default: function cordovaExec() {} }));
+const Claude = (await import("plugins/claude/www/Claude.js")).default;
 
 /**
  * QA Test Suite — End-to-end flow validation for Claude integration.
