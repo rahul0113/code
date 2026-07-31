@@ -5,8 +5,8 @@
  * Handles streaming display and markdown rendering.
  */
 
-import toast from "src/components/toast";
-import aiWebSocket from "src/ai/websocket";
+import toast from "../../components/toast";
+import aiWebSocket from "../../ai/websocket";
 
 const INPUT_MAX_LENGTH = 32768;
 
@@ -261,7 +261,7 @@ class AIChat {
 	}
 
 	/**
-	 * Handle a server message (text, tool_call, patch, error).
+	 * Handle a server message (text, tool_start, tool_result, patch, error).
 	 * @param {object} msg
 	 */
 	_handleServerMessage(msg) {
@@ -269,11 +269,34 @@ class AIChat {
 			case "text":
 				this._appendToStreaming(msg.content || msg.text || "");
 				break;
+			case "tool_start":
+				this._appendToStreaming(`\n\n> **Tool:** ${msg.name}\n> Running...\n`);
+				break;
+			case "tool_result": {
+				const status = msg.error ? `Error: ${msg.error}` : "Done";
+				const preview = msg.output
+					? msg.output.slice(0, 500) + (msg.output.length > 500 ? "\n... (truncated)" : "")
+					: "";
+				let text = `> ${status}\n`;
+				if (preview) text += `\`\`\`\n${preview}\n\`\`\`\n`;
+				this._appendToStreaming(text);
+				break;
+			}
 			case "tool_call":
 				this._appendToStreaming(`\n\`\`\`\nTool: ${msg.name}\nInput: ${JSON.stringify(msg.input, null, 2)}\n\`\`\`\n`);
 				break;
 			case "patch":
 				this._appendToStreaming(`\n\`\`\`diff\n${msg.raw || ""}\n\`\`\`\n`);
+				break;
+			case "patch_proposed":
+				this._showPatchApproval(msg);
+				break;
+			case "patch_result":
+				if (msg.success) {
+					toast(`Patch applied to ${msg.filePath || "file"}`, 3000);
+				} else {
+					toast(`Patch failed: ${msg.error || "unknown error"}`, 3000);
+				}
 				break;
 			case "error":
 				this._removeStreamingMessage();
@@ -284,13 +307,17 @@ class AIChat {
 	}
 
 	/**
-	 * Handle a streaming chunk.
+	 * Handle a streaming chunk (text_delta or streaming status).
 	 * @param {object} msg
 	 */
 	_handleChunk(msg) {
-		if (msg.status === "started") return;
-		if (msg.status === "done") {
+		if (msg.type === "streaming" && msg.status === "started") return;
+		if (msg.type === "streaming" && msg.status === "done") {
 			this._finalizeStreaming();
+			return;
+		}
+		if (msg.type === "text_delta" && msg.content) {
+			this._appendToStreaming(msg.content);
 			return;
 		}
 		if (msg.content) {
@@ -303,11 +330,81 @@ class AIChat {
 	 * @param {object} msg
 	 */
 	_handlePatch(msg) {
-		if (msg.type === "patch_applied") {
+		if (msg.type === "patch_applied" || (msg.type === "patch_result" && msg.success)) {
 			toast("Patch applied successfully", 3000);
-		} else if (msg.type === "patch_rejected") {
-			toast("Patch rejected", 3000);
+		} else if (msg.type === "patch_rejected" || (msg.type === "patch_result" && !msg.success)) {
+			toast(msg.error || "Patch rejected", 3000);
 		}
+	}
+
+	/**
+	 * Show patch approval buttons in the chat.
+	 * @param {object} msg - patch_proposed message with patchId, filePath, old, new
+	 */
+	_showPatchApproval(msg) {
+		const el = document.createElement("div");
+		el.className = "ai-chat__message ai-chat__message--assistant ai-chat__message--patch";
+
+		const filePath = msg.filePath || "file";
+		const diff = this._computeDiff(msg.old || "", msg.new || "");
+
+		el.innerHTML = `
+			<div class="ai-chat__patch-file">Patch: ${this._escapeHtml(filePath)}</div>
+			<pre class="ai-chat__patch-diff"><code>${this._escapeHtml(diff)}</code></pre>
+			<div class="ai-chat__patch-actions">
+				<button class="ai-chat__patch-accept">Accept</button>
+				<button class="ai-chat__patch-reject">Reject</button>
+			</div>
+		`;
+
+		el.querySelector(".ai-chat__patch-accept").addEventListener("click", () => {
+			aiWebSocket.send({ type: "apply_patch", patchId: msg.patchId });
+			el.querySelector(".ai-chat__patch-actions").innerHTML = '<span class="ai-chat__patch-status">Accepted</span>';
+		});
+
+		el.querySelector(".ai-chat__patch-reject").addEventListener("click", () => {
+			aiWebSocket.send({ type: "reject_patch", patchId: msg.patchId });
+			el.querySelector(".ai-chat__patch-actions").innerHTML = '<span class="ai-chat__patch-status">Rejected</span>';
+		});
+
+		this._messagesEl?.appendChild(el);
+		this._scrollToBottom();
+	}
+
+	/**
+	 * Compute a simple unified diff between old and new content.
+	 * @param {string} oldText
+	 * @param {string} newText
+	 * @returns {string}
+	 */
+	_computeDiff(oldText, newText) {
+		const oldLines = oldText.split("\n");
+		const newLines = newText.split("\n");
+		const diff = [];
+
+		const maxLen = Math.max(oldLines.length, newLines.length);
+		for (let i = 0; i < maxLen; i++) {
+			if (i >= oldLines.length) {
+				diff.push(`+ ${newLines[i]}`);
+			} else if (i >= newLines.length) {
+				diff.push(`- ${oldLines[i]}`);
+			} else if (oldLines[i] !== newLines[i]) {
+				diff.push(`- ${oldLines[i]}`);
+				diff.push(`+ ${newLines[i]}`);
+			}
+		}
+		return diff.join("\n") || "(no changes)";
+	}
+
+	/**
+	 * Escape HTML to prevent XSS.
+	 * @param {string} str
+	 * @returns {string}
+	 */
+	_escapeHtml(str) {
+		const div = document.createElement("div");
+		div.textContent = str;
+		return div.innerHTML;
 	}
 
 	/**
@@ -397,3 +494,5 @@ class AIChat {
 		}
 	}
 }
+
+export default AIChat;

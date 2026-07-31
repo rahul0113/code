@@ -1,112 +1,178 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createMessageRouter } from "ai/messageRouter";
+import { EventEmitter } from "events";
 
-function createMockWs() {
-  const messages = [];
+function mockWs() {
+  const sent = [];
   return {
-    messages,
-    send: (data) => messages.push(JSON.parse(data)),
+    sent,
+    send(data) { sent.push(JSON.parse(data)); },
   };
 }
 
-function createMockOpenClaude(running = false) {
+function mockOpenClaude(running = true) {
+  const stdout = new EventEmitter();
+  const stdinWrite = vi.fn();
   return {
-    isRunning: () => running,
+    stdout,
+    process: { stdout, stdin: { write: stdinWrite }, killed: !running },
+    isRunning: vi.fn().mockReturnValue(running),
     spawn: vi.fn(),
     kill: vi.fn(),
     sendInput: vi.fn(),
-    parseBufferedOutput: () => [{ type: "text", content: "test response" }],
+    writeToolResult: vi.fn().mockReturnValue(true),
   };
 }
 
-function createMockPatchManager() {
+function mockPatchManager() {
   return {
-    apply: vi.fn(() => ({ success: true, filePath: "/test.js" })),
+    queue: vi.fn().mockReturnValue({ id: "p1", filePath: "/tmp/x.js", old: "", new: "code" }),
+    apply: vi.fn().mockReturnValue({ success: true, filePath: "/tmp/x.js" }),
     reject: vi.fn(),
   };
 }
 
 describe("messageRouter", () => {
-  it("handles unknown message type", async () => {
-    const router = createMessageRouter({
-      openClaude: createMockOpenClaude(),
-      patchManager: createMockPatchManager(),
-    });
-    const ws = createMockWs();
-    await router.handleMessage(ws, { type: "unknown" });
-    expect(ws.messages[0].type).toBe("error");
+  let openClaude, patchManager, router, ws;
+
+  beforeEach(() => {
+    openClaude = mockOpenClaude();
+    patchManager = mockPatchManager();
+    router = createMessageRouter({ openClaude, patchManager });
+    ws = mockWs();
   });
 
-  it("handles connect message", async () => {
-    const openClaude = createMockOpenClaude();
-    const router = createMessageRouter({
-      openClaude,
-      patchManager: createMockPatchManager(),
+  describe("connect", () => {
+    it("spawns process and sends connected", async () => {
+      await router.handleMessage(ws, { type: "connect", options: { cwd: "/public" } });
+      expect(openClaude.spawn).toHaveBeenCalled();
+      expect(ws.sent[0].type).toBe("connected");
     });
-    const ws = createMockWs();
-    await router.handleMessage(ws, { type: "connect", options: { model: "test" } });
-    expect(openClaude.spawn).toHaveBeenCalledWith({ model: "test" });
-    expect(ws.messages[0].type).toBe("connected");
   });
 
-  it("handles disconnect message", async () => {
-    const openClaude = createMockOpenClaude();
-    const router = createMessageRouter({
-      openClaude,
-      patchManager: createMockPatchManager(),
+  describe("disconnect", () => {
+    it("kills process and sends disconnected", async () => {
+      await router.handleMessage(ws, { type: "disconnect" });
+      expect(openClaude.kill).toHaveBeenCalled();
+      expect(ws.sent[0].type).toBe("disconnected");
     });
-    const ws = createMockWs();
-    await router.handleMessage(ws, { type: "disconnect" });
-    expect(openClaude.kill).toHaveBeenCalled();
-    expect(ws.messages[0].type).toBe("disconnected");
   });
 
-  it("handles prompt when not connected", async () => {
-    const router = createMessageRouter({
-      openClaude: createMockOpenClaude(false),
-      patchManager: createMockPatchManager(),
+  describe("prompt", () => {
+    it("sends error when not connected", async () => {
+      openClaude = mockOpenClaude(false);
+      openClaude.process = null;
+      router = createMessageRouter({ openClaude, patchManager });
+      await router.handleMessage(ws, { type: "prompt", prompt: "hello" });
+      expect(ws.sent[0].type).toBe("error");
+      expect(ws.sent[0].message).toContain("Not connected");
     });
-    const ws = createMockWs();
-    await router.handleMessage(ws, { type: "prompt", prompt: "hello" });
-    expect(ws.messages[0].type).toBe("error");
-    expect(ws.messages[0].message).toContain("Not connected");
+
+    it("streams text deltas and result", async () => {
+      await router.handleMessage(ws, { type: "connect" });
+      ws.sent.length = 0;
+
+      const promptPromise = router.handleMessage(ws, {
+        type: "prompt",
+        prompt: "say hello",
+      });
+
+      openClaude.stdout.emit("data", Buffer.from(JSON.stringify({
+        type: "assistant",
+        message: { content: [{ type: "text", text: "Hi there!" }] },
+      }) + "\n"));
+
+      openClaude.stdout.emit("data", Buffer.from(JSON.stringify({
+        type: "result",
+        subtype: "success",
+        cost_usd: 0.01,
+      }) + "\n"));
+
+      await promptPromise;
+
+      const types = ws.sent.map(s => s.type);
+      expect(types).toContain("streaming");
+      expect(types).toContain("text_delta");
+      expect(types).toContain("result");
+      expect(ws.sent.find(s => s.type === "text_delta").content).toBe("Hi there!");
+    });
+
+    it("executes tool_use and feeds result back", async () => {
+      await router.handleMessage(ws, { type: "connect" });
+      ws.sent.length = 0;
+
+      const promptPromise = router.handleMessage(ws, {
+        type: "prompt",
+        prompt: "read file",
+      });
+
+      openClaude.stdout.emit("data", Buffer.from(JSON.stringify({
+        type: "assistant",
+        message: {
+          content: [{
+            type: "tool_use",
+            id: "toolu_1",
+            name: "read_file",
+            input: { path: "/tmp/test.txt" },
+          }],
+        },
+      }) + "\n"));
+
+      await new Promise(r => setTimeout(r, 50));
+
+      openClaude.stdout.emit("data", Buffer.from(JSON.stringify({
+        type: "result",
+        subtype: "success",
+        cost_usd: 0.02,
+      }) + "\n"));
+
+      await promptPromise;
+
+      expect(ws.sent.some(s => s.type === "tool_start")).toBe(true);
+      expect(ws.sent.some(s => s.type === "tool_result")).toBe(true);
+      expect(openClaude.writeToolResult).toHaveBeenCalled();
+    });
   });
 
-  it("handles apply_patch", async () => {
-    const patchMgr = createMockPatchManager();
-    const router = createMessageRouter({
-      openClaude: createMockOpenClaude(),
-      patchManager: patchMgr,
+  describe("cancel", () => {
+    it("kills process and sends cancelled", async () => {
+      await router.handleMessage(ws, { type: "cancel" });
+      expect(openClaude.kill).toHaveBeenCalled();
+      expect(ws.sent[0].type).toBe("cancelled");
     });
-    const ws = createMockWs();
-    const patch = { filePath: "/test.js", old: "a", new: "b" };
-    await router.handleMessage(ws, { type: "apply_patch", patch });
-    expect(patchMgr.apply).toHaveBeenCalledWith(patch);
-    expect(ws.messages[0].type).toBe("patch_applied");
-    expect(ws.messages[0].success).toBe(true);
   });
 
-  it("handles reject_patch", async () => {
-    const patchMgr = createMockPatchManager();
-    const router = createMessageRouter({
-      openClaude: createMockOpenClaude(),
-      patchManager: patchMgr,
+  describe("apply_patch", () => {
+    it("applies patch and sends result", async () => {
+      await router.handleMessage(ws, {
+        type: "apply_patch",
+        patchId: "p1",
+        filePath: "/tmp/x.js",
+        old: "",
+        new: "code",
+      });
+      expect(patchManager.apply).toHaveBeenCalled();
+      expect(ws.sent[0].type).toBe("patch_result");
+      expect(ws.sent[0].success).toBe(true);
     });
-    const ws = createMockWs();
-    await router.handleMessage(ws, { type: "reject_patch", patchId: "patch-1" });
-    expect(patchMgr.reject).toHaveBeenCalledWith("patch-1");
-    expect(ws.messages[0].type).toBe("patch_rejected");
   });
 
-  it("handles cancel", async () => {
-    const openClaude = createMockOpenClaude();
-    const router = createMessageRouter({
-      openClaude,
-      patchManager: createMockPatchManager(),
+  describe("reject_patch", () => {
+    it("rejects patch and sends result", async () => {
+      await router.handleMessage(ws, {
+        type: "reject_patch",
+        patchId: "p1",
+      });
+      expect(patchManager.reject).toHaveBeenCalledWith("p1");
+      expect(ws.sent[0].type).toBe("patch_result");
+      expect(ws.sent[0].success).toBe(false);
     });
-    const ws = createMockWs();
-    await router.handleMessage(ws, { type: "cancel" });
-    expect(openClaude.kill).toHaveBeenCalled();
-    expect(ws.messages[0].type).toBe("cancelled");
+  });
+
+  describe("unknown type", () => {
+    it("sends error for unknown message type", async () => {
+      await router.handleMessage(ws, { type: "unknown" });
+      expect(ws.sent[0].type).toBe("error");
+    });
   });
 });

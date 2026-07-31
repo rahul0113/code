@@ -343,9 +343,17 @@ describe("QA-06: File Structure Compliance", () => {
     "src/plugins/claude/src/android/ClaudePlugin.java",
     "src/lib/claude/cliParser.js",
     "src/lib/claude/storage.js",
+    "src/ai/openClaudeManager.js",
+    "src/ai/messageRouter.js",
+    "src/ai/toolExecutor.js",
+    "src/ai/contextCollector.js",
+    "src/ai/patchManager.js",
     "tests/unit/claude/cliParser.test.js",
     "tests/unit/claude/storage.test.js",
     "tests/unit/claude/settings.test.js",
+    "tests/unit/ai/openClaudeManager.test.js",
+    "tests/unit/ai/messageRouter.test.js",
+    "tests/unit/ai/toolExecutor.test.js",
     ".github/workflows/ci.yml",
     "vitest.config.js",
     "CONTEXT.md",
@@ -398,6 +406,7 @@ describe("QA-08: Code Quality Checks", () => {
     expect(typeof mod.parseCliOutput).toBe("function");
     expect(typeof mod.parseDiffContent).toBe("function");
     expect(typeof mod.createStreamingParser).toBe("function");
+    expect(typeof mod.parseStreamLine).toBe("function");
   });
 
   it("storage.js exports all required functions", async () => {

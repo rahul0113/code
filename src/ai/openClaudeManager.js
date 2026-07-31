@@ -95,6 +95,35 @@ class OpenClaudeManager {
     return raw ? parseCliOutput(raw) : [];
   }
 
+  /**
+   * Register a callback for stdout data events.
+   * @param {(chunk: string) => void} callback
+   */
+  onStdoutData(callback) {
+    if (this.process && this.process.stdout) {
+      this.process.stdout.on("data", (chunk) => {
+        callback(typeof chunk === "string" ? chunk : chunk.toString("utf8"));
+      });
+    }
+  }
+
+  /**
+   * Write a tool result to the Claude process stdin.
+   * @param {string} resultJson - The tool result as a JSON string
+   * @returns {boolean} true if write succeeded
+   */
+  writeToolResult(resultJson) {
+    if (!this.process || !this.process.stdin || !this.isRunning()) {
+      return false;
+    }
+    try {
+      this.process.stdin.write(resultJson + "\n");
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   kill() {
     if (this.process) {
       this.process.kill("SIGTERM");

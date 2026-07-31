@@ -326,13 +326,19 @@ class AIWebSocket {
 			case "tool_call":
 			case "patch":
 			case "error":
+			case "tool_start":
+			case "tool_result":
+			case "result":
+			case "cancelled":
 				this._emitMessage(msg);
 				break;
 			case "streaming":
+			case "text_delta":
 				this._emitChunk(msg);
 				break;
 			case "patch_applied":
 			case "patch_rejected":
+			case "patch_result":
 				this._emitPatch(msg);
 				break;
 			default:

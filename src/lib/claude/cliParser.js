@@ -330,8 +330,51 @@ function createStreamingParser() {
   return parser;
 }
 
+/**
+ * Parse a single line from Claude's --output-format stream-json stdout.
+ *
+ * @param {string} line - A single JSON line from the stream
+ * @returns {{ type: string, content?: string, name?: string, input?: object, id?: string, subtype?: string, costUsd?: number }|null}
+ */
+function parseStreamLine(line) {
+  if (!line || !line.trim()) return null;
+  let obj;
+  try {
+    obj = JSON.parse(line);
+  } catch {
+    return null;
+  }
+
+  if (obj.type === "assistant" && obj.message && Array.isArray(obj.message.content)) {
+    for (const block of obj.message.content) {
+      if (block.type === "text" && block.text) {
+        return { type: "text_delta", content: block.text };
+      }
+      if (block.type === "tool_use") {
+        return {
+          type: "tool_use",
+          id: block.id,
+          name: block.name,
+          input: block.input || {},
+        };
+      }
+    }
+  }
+
+  if (obj.type === "result") {
+    return {
+      type: "result",
+      subtype: obj.subtype,
+      costUsd: obj.cost_usd || 0,
+    };
+  }
+
+  return null;
+}
+
 module.exports = {
   parseCliOutput,
   parseDiffContent,
   createStreamingParser,
+  parseStreamLine,
 };
