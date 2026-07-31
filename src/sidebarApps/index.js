@@ -90,6 +90,7 @@ async function loadApps() {
 	add(...(await import("./searchInFiles")).default);
 	add(...(await import("./extensions")).default);
 	add(...(await import("./notification")).default);
+	add(...(await import("./ai")).default);
 	setSponsorSidebarAppVisibility(appSettings.value.showSponsorSidebarApp);
 }
 
@@ -190,4 +191,5 @@ export default {
 	remove,
 	loadApps,
 	ensureActiveApp,
+	setActiveApp,
 };

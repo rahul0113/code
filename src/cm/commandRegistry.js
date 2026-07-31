@@ -427,6 +427,16 @@ function registerCoreCommands() {
 		},
 	});
 	addCommand({
+		name: "toggleAiChat",
+		description: "Toggle AI chat panel",
+		readOnly: true,
+		requiresView: false,
+		run() {
+			acode.exec("toggle-ai-chat");
+			return true;
+		},
+	});
+	addCommand({
 		name: "toggleMenu",
 		description: "Toggle main menu",
 		readOnly: true,

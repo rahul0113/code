@@ -714,6 +714,13 @@ const APP_BINDING_CONFIG = [
 		readOnly: true,
 		editorOnly: true,
 	},
+	{
+		name: "toggleAiChat",
+		description: "Toggle AI chat panel",
+		key: "Ctrl-Shift-A",
+		action: "toggle-ai-chat",
+		readOnly: true,
+	},
 ];
 
 const APP_KEY_BINDINGS = buildAppBindings(APP_BINDING_CONFIG);

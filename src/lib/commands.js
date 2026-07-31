@@ -8,6 +8,7 @@ import actions from "handlers/quickTools";
 import recents from "lib/recents";
 import { getColorRange } from "utils/color/regex";
 import helpers from "utils/helpers";
+import sidebarApps from "sidebarApps";
 import Url from "utils/Url";
 import checkFiles from "./checkFiles";
 import config from "./config";
@@ -536,6 +537,10 @@ export default {
 	},
 	"toggle-sidebar"() {
 		Sidebar.toggle();
+	},
+	"toggle-ai-chat"() {
+		Sidebar.show();
+		sidebarApps.setActiveApp("ai-chat");
 	},
 	"toggle-menu"() {
 		tag.get("[action=toggle-menu]")?.click();
