@@ -27,10 +27,12 @@ class AIStatus {
 	 * @returns {HTMLElement}
 	 */
 	create() {
-		this._el = <div className="ai-status">
-			<span className="ai-status__dot"></span>
-			<span className="ai-status__text">Disconnected</span>
-		</div>;
+		this._el = (
+			<div className="ai-status">
+				<span className="ai-status__dot"></span>
+				<span className="ai-status__text">Disconnected</span>
+			</div>
+		);
 		this._dot = this._el.querySelector(".ai-status__dot");
 		this._text = this._el.querySelector(".ai-status__text");
 		this.setState("disconnected");

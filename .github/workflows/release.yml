@@ -1,0 +1,120 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter
+        run: npx biome check src/ai/ src/sidebarApps/ai/ src/lib/claude/ tests/
+
+      - name: Run tests
+        run: npx vitest run --reporter=verbose
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build web assets
+        run: npm run build
+
+      - name: Install Cordova
+        run: npm install -g cordova
+
+      - name: Add Android platform
+        run: npx cordova platform add android
+
+      - name: Decode keystore
+        if: env.KEYSTORE_BASE64 != ''
+        run: echo "$KEYSTORE_BASE64" | base64 -d > android-release.keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+
+      - name: Build release APK
+        run: npx cordova build android --release
+        env:
+          ANDROID_KEYSTORE: ${{ secrets.KEYSTORE_BASE64 != '' && 'android-release.keystore' || '' }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+
+      - name: Sign APK (jarsigner fallback)
+        if: env.KEYSTORE_BASE64 != ''
+        run: |
+          APK_PATH=$(find platforms/android/app/build/outputs/apk/release -name "*.apk" | head -1)
+          if [ -n "$APK_PATH" ]; then
+            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 \
+              -keystore android-release.keystore \
+              -storepass "$KEYSTORE_PASSWORD" \
+              "$APK_PATH" "$KEY_ALIAS"
+            jarsigner -verify "$APK_PATH"
+          fi
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-release
+          path: platforms/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: apk-release
+          path: ./apk
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./apk/**/*.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: false

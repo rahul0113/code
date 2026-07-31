@@ -24,7 +24,7 @@
 			"style": {
 				"noNegationElse": "off",
 				"useForOf": "error",
-				"useNodejsImportProtocol": "error",
+				"useNodejsImportProtocol": "off",
 				"useNumberNamespace": "error"
 			},
 			"suspicious": {

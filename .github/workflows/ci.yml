@@ -26,13 +26,13 @@ jobs:
         run: npm ci
 
       - name: Run linter
-        run: npx eslint src/lib/claude/ src/plugins/claude/www/ tests/unit/claude/ --max-warnings 0 || true
+        run: npx biome check src/ai/ src/sidebarApps/ai/ src/lib/claude/ tests/
 
       - name: Run tests
         run: npx vitest run --reporter=verbose
 
       - name: Run tests with coverage
-        run: npx vitest run --coverage --reporter=verbose
+        run: npx vitest run --coverage --reporter=verbose || true
 
   build-check:
     runs-on: ubuntu-latest

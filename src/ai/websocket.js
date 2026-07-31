@@ -88,7 +88,9 @@ class AIWebSocket {
 				if (settled) return;
 
 				if (this._authToken) {
-					this._ws.send(JSON.stringify({ type: "auth", token: this._authToken }));
+					this._ws.send(
+						JSON.stringify({ type: "auth", token: this._authToken }),
+					);
 				} else {
 					settled = true;
 					this._onConnected(resolve);
@@ -259,39 +261,75 @@ class AIWebSocket {
 	// ── Event registration (additive) ────────────────────────────
 
 	/** @param {(msg: object) => void} cb */
-	onMessage(cb) { this._messageListeners.add(cb); }
+	onMessage(cb) {
+		this._messageListeners.add(cb);
+	}
 	/** @param {(chunk: object) => void} cb */
-	onChunk(cb) { this._chunkListeners.add(cb); }
+	onChunk(cb) {
+		this._chunkListeners.add(cb);
+	}
 	/** @param {(patch: object) => void} cb */
-	onPatch(cb) { this._patchListeners.add(cb); }
+	onPatch(cb) {
+		this._patchListeners.add(cb);
+	}
 	/** @param {(err: Event) => void} cb */
-	onError(cb) { this._errorListeners.add(cb); }
+	onError(cb) {
+		this._errorListeners.add(cb);
+	}
 	/** @param {() => void} cb */
-	onDisconnect(cb) { this._disconnectListeners.add(cb); }
+	onDisconnect(cb) {
+		this._disconnectListeners.add(cb);
+	}
 	/** @param {() => void} cb */
-	onConnect(cb) { this._connectListeners.add(cb); }
+	onConnect(cb) {
+		this._connectListeners.add(cb);
+	}
 
 	/** @param {(msg: object) => void} cb */
-	offMessage(cb) { this._messageListeners.delete(cb); }
+	offMessage(cb) {
+		this._messageListeners.delete(cb);
+	}
 	/** @param {(chunk: object) => void} cb */
-	offChunk(cb) { this._chunkListeners.delete(cb); }
+	offChunk(cb) {
+		this._chunkListeners.delete(cb);
+	}
 	/** @param {(patch: object) => void} cb */
-	offPatch(cb) { this._patchListeners.delete(cb); }
+	offPatch(cb) {
+		this._patchListeners.delete(cb);
+	}
 	/** @param {(err: Event) => void} cb */
-	offError(cb) { this._errorListeners.delete(cb); }
+	offError(cb) {
+		this._errorListeners.delete(cb);
+	}
 	/** @param {() => void} cb */
-	offDisconnect(cb) { this._disconnectListeners.delete(cb); }
+	offDisconnect(cb) {
+		this._disconnectListeners.delete(cb);
+	}
 	/** @param {() => void} cb */
-	offConnect(cb) { this._connectListeners.delete(cb); }
+	offConnect(cb) {
+		this._connectListeners.delete(cb);
+	}
 
 	// ── Emit helpers ──────────────────────────────────────────────
 
-	_emitMessage(msg) { for (const cb of this._messageListeners) cb(msg); }
-	_emitChunk(chunk) { for (const cb of this._chunkListeners) cb(chunk); }
-	_emitPatch(patch) { for (const cb of this._patchListeners) cb(patch); }
-	_emitError(err) { for (const cb of this._errorListeners) cb(err); }
-	_emitDisconnect() { for (const cb of this._disconnectListeners) cb(); }
-	_emitConnect() { for (const cb of this._connectListeners) cb(); }
+	_emitMessage(msg) {
+		for (const cb of this._messageListeners) cb(msg);
+	}
+	_emitChunk(chunk) {
+		for (const cb of this._chunkListeners) cb(chunk);
+	}
+	_emitPatch(patch) {
+		for (const cb of this._patchListeners) cb(patch);
+	}
+	_emitError(err) {
+		for (const cb of this._errorListeners) cb(err);
+	}
+	_emitDisconnect() {
+		for (const cb of this._disconnectListeners) cb();
+	}
+	_emitConnect() {
+		for (const cb of this._connectListeners) cb();
+	}
 
 	// ── Internal ──────────────────────────────────────────────────
 

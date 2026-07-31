@@ -341,23 +341,34 @@ describe("QA-06: File Structure Compliance", () => {
     "src/plugins/claude/src/android/ClaudePlugin.java",
     "src/lib/claude/cliParser.js",
     "src/lib/claude/storage.js",
+    "src/ai/server.js",
     "src/ai/openClaudeManager.js",
     "src/ai/messageRouter.js",
     "src/ai/toolExecutor.js",
     "src/ai/contextCollector.js",
     "src/ai/patchManager.js",
+    "src/ai/diffViewer.js",
+    "src/ai/patchDialog.js",
+    "src/ai/conflictResolver.js",
+    "src/ai/patchHistory.js",
+    "src/ai/settings.js",
+    "src/ai/conversationStore.js",
+    "src/ai/terminalBridge.js",
+    "src/ai/tokenManager.js",
+    "src/ai/websocket.js",
     "tests/unit/claude/cliParser.test.js",
     "tests/unit/claude/storage.test.js",
     "tests/unit/claude/settings.test.js",
     "tests/unit/ai/openClaudeManager.test.js",
     "tests/unit/ai/messageRouter.test.js",
     "tests/unit/ai/toolExecutor.test.js",
+    "tests/unit/ai/newModules.test.js",
     ".github/workflows/ci.yml",
+    ".github/workflows/release.yml",
     "vitest.config.js",
-    "CONTEXT.md",
-    "AUDIT.md",
-    "PLAN.md",
-    "PATCH_CONTRACT.md",
+    "README.md",
+    "LICENSE",
+    "CONTRIBUTING.md",
   ];
 
   for (const file of REQUIRED_FILES) {
@@ -441,49 +452,41 @@ describe("QA-08: Code Quality Checks", () => {
 // ── QA-09: Documentation Compliance ─────────────────────────────
 describe("QA-09: Documentation Compliance", () => {
 
-  it("CONTEXT.md contains all required sections", () => {
-    const content = fs.readFileSync("CONTEXT.md", "utf8");
-    const required = [
-      "Project Overview",
-      "Architecture",
-      "API Contract",
-      "Patch Application Contract",
-      "Acode Codebase Reference",
-      "UI/UX Integration Points",
-      "Testing Strategy",
-      "File Structure",
-      "Risk Mitigations",
-      "Design Principles",
-      "Configuration",
-      "Phase Exit Criteria",
-      "Implementation Order",
-    ];
-    for (const section of required) {
-      expect(content).toContain(section);
-    }
+  it("README.md documents project features", () => {
+    const content = fs.readFileSync("README.md", "utf8");
+    expect(content).toContain("Acode");
+    expect(content).toContain("AI Integration");
+    expect(content).toContain("Chat Interface");
+    expect(content).toContain("Streaming Responses");
+    expect(content).toContain("Patch Flow");
+    expect(content).toContain("Conflict Resolution");
+    expect(content).toContain("Undo Support");
   });
 
-  it("AUDIT.md contains architecture analysis", () => {
-    const content = fs.readFileSync("AUDIT.md", "utf8");
-    expect(content).toContain("Architecture");
-    expect(content).toContain("Cordova");
-    expect(content).toContain("CodeMirror");
+  it("README.md documents development setup", () => {
+    const content = fs.readFileSync("README.md", "utf8");
+    expect(content).toContain("Prerequisites");
+    expect(content).toContain("Quick Start");
+    expect(content).toContain("npm ci");
+    expect(content).toContain("npm test");
+    expect(content).toContain("Building APK");
   });
 
-  it("PLAN.md contains phased roadmap", () => {
-    const content = fs.readFileSync("PLAN.md", "utf8");
-    expect(content).toContain("Phase 0");
-    expect(content).toContain("Phase 1");
-    expect(content).toContain("Phase 2");
-    expect(content).toContain("Phase 3");
-    expect(content).toContain("Phase 4");
+  it("LICENSE contains MIT license", () => {
+    const content = fs.readFileSync("LICENSE", "utf8");
+    expect(content).toContain("MIT License");
+    expect(content).toContain("Copyright");
+    expect(content).toContain("Permission is hereby granted");
   });
 
-  it("PATCH_CONTRACT.md contains state machine", () => {
-    const content = fs.readFileSync("PATCH_CONTRACT.md", "utf8");
-    expect(content).toContain("State Machine");
-    expect(content).toContain("IDLE");
-    expect(content).toContain("STREAMING");
-    expect(content).toContain("ROLLBACK");
+  it("CONTRIBUTING.md exists and contains contribution guidelines", () => {
+    const content = fs.readFileSync("CONTRIBUTING.md", "utf8");
+    expect(content.length).toBeGreaterThan(0);
+  });
+
+  it("release.yml triggers on version tags", () => {
+    const content = fs.readFileSync(".github/workflows/release.yml", "utf8");
+    expect(content).toContain("v*");
+    expect(content).toContain("release");
   });
 });

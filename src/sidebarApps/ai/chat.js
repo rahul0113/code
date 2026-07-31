@@ -5,8 +5,8 @@
  * Handles streaming display and markdown rendering.
  */
 
-import toast from "../../components/toast";
 import aiWebSocket from "../../ai/websocket";
+import toast from "../../components/toast";
 
 const INPUT_MAX_LENGTH = 32768;
 
@@ -63,21 +63,26 @@ class AIChat {
 		container.classList.add("ai-chat");
 
 		// Status bar
-		const status = <div className="ai-chat__status">
-			<span className="ai-chat__status-dot"></span>
-			<span className="ai-chat__status-text">Disconnected</span>
-		</div>;
+		const status = (
+			<div className="ai-chat__status">
+				<span className="ai-chat__status-dot"></span>
+				<span className="ai-chat__status-text">Disconnected</span>
+			</div>
+		);
 
 		// Messages area
-		this._messagesEl = <div className="ai-chat__messages">
-			<div className="ai-chat__welcome">
-				<div className="ai-chat__welcome-icon icon brain"></div>
-				<div className="ai-chat__welcome-title">AI Coding Assistant</div>
-				<div className="ai-chat__welcome-text">
-					Ask me to help with your code. I can read files, suggest changes, and apply patches.
+		this._messagesEl = (
+			<div className="ai-chat__messages">
+				<div className="ai-chat__welcome">
+					<div className="ai-chat__welcome-icon icon brain"></div>
+					<div className="ai-chat__welcome-title">AI Coding Assistant</div>
+					<div className="ai-chat__welcome-text">
+						Ask me to help with your code. I can read files, suggest changes,
+						and apply patches.
+					</div>
 				</div>
 			</div>
-		</div>;
+		);
 
 		// Input area
 		this._inputEl = (
@@ -94,16 +99,21 @@ class AIChat {
 		);
 
 		this._cancelBtn = (
-			<button className="ai-chat__cancel-btn icon cancel" title="Cancel"></button>
+			<button
+				className="ai-chat__cancel-btn icon cancel"
+				title="Cancel"
+			></button>
 		);
 
-		const inputArea = <div className="ai-chat__input-area">
-			{this._inputEl}
-			<div className="ai-chat__input-actions">
-				{this._sendBtn}
-				{this._cancelBtn}
+		const inputArea = (
+			<div className="ai-chat__input-area">
+				{this._inputEl}
+				<div className="ai-chat__input-actions">
+					{this._sendBtn}
+					{this._cancelBtn}
+				</div>
 			</div>
-		</div>;
+		);
 
 		container.appendChild(status);
 		container.appendChild(this._messagesEl);
@@ -132,7 +142,8 @@ class AIChat {
 		}
 
 		// Auto-connect
-		aiWebSocket.connect()
+		aiWebSocket
+			.connect()
 			.then(() => {
 				if (this._generation !== gen) return;
 				aiWebSocket.connectBackend();
@@ -236,9 +247,11 @@ class AIChat {
 		const msg = { role, content, timestamp: Date.now() };
 		this._messages.push(msg);
 
-		const el = <div className={`ai-chat__message ai-chat__message--${role}`}>
-			<div className="ai-chat__message-content md">{content}</div>
-		</div>;
+		const el = (
+			<div className={`ai-chat__message ai-chat__message--${role}`}>
+				<div className="ai-chat__message-content md">{content}</div>
+			</div>
+		);
 		this._messagesEl?.appendChild(el);
 		this._scrollToBottom();
 	}
@@ -248,13 +261,17 @@ class AIChat {
 	 */
 	_createStreamingMessage() {
 		this._removeStreamingMessage();
-		this._streamingEl = <div className="ai-chat__message ai-chat__message--assistant ai-chat__message--streaming">
-			<div className="ai-chat__message-content md">
-				<div className="ai-chat__typing-indicator">
-					<span></span><span></span><span></span>
+		this._streamingEl = (
+			<div className="ai-chat__message ai-chat__message--assistant ai-chat__message--streaming">
+				<div className="ai-chat__message-content md">
+					<div className="ai-chat__typing-indicator">
+						<span></span>
+						<span></span>
+						<span></span>
+					</div>
 				</div>
 			</div>
-		</div>;
+		);
 		this._messagesEl?.appendChild(this._streamingEl);
 		this._scrollToBottom();
 	}
@@ -284,7 +301,8 @@ class AIChat {
 			case "tool_result": {
 				const status = msg.error ? `Error: ${msg.error}` : "Done";
 				const preview = msg.output
-					? msg.output.slice(0, 500) + (msg.output.length > 500 ? "\n... (truncated)" : "")
+					? msg.output.slice(0, 500) +
+						(msg.output.length > 500 ? "\n... (truncated)" : "")
 					: "";
 				let text = `> ${status}\n`;
 				if (preview) text += `\`\`\`\n${preview}\n\`\`\`\n`;
@@ -292,7 +310,9 @@ class AIChat {
 				break;
 			}
 			case "tool_call":
-				this._appendToStreaming(`\n\`\`\`\nTool: ${msg.name}\nInput: ${JSON.stringify(msg.input, null, 2)}\n\`\`\`\n`);
+				this._appendToStreaming(
+					`\n\`\`\`\nTool: ${msg.name}\nInput: ${JSON.stringify(msg.input, null, 2)}\n\`\`\`\n`,
+				);
 				break;
 			case "patch":
 				this._appendToStreaming(`\n\`\`\`diff\n${msg.raw || ""}\n\`\`\`\n`);
@@ -339,9 +359,15 @@ class AIChat {
 	 * @param {object} msg
 	 */
 	_handlePatch(msg) {
-		if (msg.type === "patch_applied" || (msg.type === "patch_result" && msg.success)) {
+		if (
+			msg.type === "patch_applied" ||
+			(msg.type === "patch_result" && msg.success)
+		) {
 			toast("Patch applied successfully", 3000);
-		} else if (msg.type === "patch_rejected" || (msg.type === "patch_result" && !msg.success)) {
+		} else if (
+			msg.type === "patch_rejected" ||
+			(msg.type === "patch_result" && !msg.success)
+		) {
 			toast(msg.error || "Patch rejected", 3000);
 		}
 	}
@@ -352,7 +378,8 @@ class AIChat {
 	 */
 	_showPatchApproval(msg) {
 		const el = document.createElement("div");
-		el.className = "ai-chat__message ai-chat__message--assistant ai-chat__message--patch";
+		el.className =
+			"ai-chat__message ai-chat__message--assistant ai-chat__message--patch";
 
 		const filePath = msg.filePath || "file";
 		const diff = this._computeDiff(msg.old || "", msg.new || "");
@@ -368,12 +395,14 @@ class AIChat {
 
 		el.querySelector(".ai-chat__patch-accept").addEventListener("click", () => {
 			aiWebSocket.send("apply_patch", { patchId: msg.patchId });
-			el.querySelector(".ai-chat__patch-actions").innerHTML = '<span class="ai-chat__patch-status">Accepted</span>';
+			el.querySelector(".ai-chat__patch-actions").innerHTML =
+				'<span class="ai-chat__patch-status">Accepted</span>';
 		});
 
 		el.querySelector(".ai-chat__patch-reject").addEventListener("click", () => {
 			aiWebSocket.send("reject_patch", { patchId: msg.patchId });
-			el.querySelector(".ai-chat__patch-actions").innerHTML = '<span class="ai-chat__patch-status">Rejected</span>';
+			el.querySelector(".ai-chat__patch-actions").innerHTML =
+				'<span class="ai-chat__patch-status">Rejected</span>';
 		});
 
 		this._messagesEl?.appendChild(el);
@@ -422,7 +451,9 @@ class AIChat {
 	 */
 	_appendToStreaming(text) {
 		if (!this._streamingEl) return;
-		const contentEl = this._streamingEl.querySelector(".ai-chat__message-content");
+		const contentEl = this._streamingEl.querySelector(
+			".ai-chat__message-content",
+		);
 		if (!contentEl) return;
 
 		// Remove typing indicator if present
@@ -438,7 +469,9 @@ class AIChat {
 	 */
 	_finalizeStreaming() {
 		if (!this._streamingEl) return;
-		const contentEl = this._streamingEl.querySelector(".ai-chat__message-content");
+		const contentEl = this._streamingEl.querySelector(
+			".ai-chat__message-content",
+		);
 
 		// Remove typing indicator before extracting content
 		const typing = contentEl?.querySelector(".ai-chat__typing-indicator");
@@ -450,7 +483,11 @@ class AIChat {
 		this._streamingEl = null;
 
 		if (content) {
-			this._messages.push({ role: "assistant", content, timestamp: Date.now() });
+			this._messages.push({
+				role: "assistant",
+				content,
+				timestamp: Date.now(),
+			});
 		}
 
 		this._setProcessing(false);

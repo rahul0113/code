@@ -21,34 +21,34 @@
  * @returns {string} Normalized absolute path
  */
 function normalizePath(path, context = {}) {
-  if (!path) return "";
+	if (!path) return "";
 
-  // Strip proot prefix if present
-  let normalized = path;
+	// Strip proot prefix if present
+	let normalized = path;
 
-  // Handle content:// URIs
-  if (normalized.startsWith("content://")) {
-    return normalized; // Pass through for SAF handling
-  }
+	// Handle content:// URIs
+	if (normalized.startsWith("content://")) {
+		return normalized; // Pass through for SAF handling
+	}
 
-  // Expand ~ to /public (home in proot)
-  if (normalized.startsWith("~")) {
-    normalized = "/public" + normalized.slice(1);
-  }
+	// Expand ~ to /public (home in proot)
+	if (normalized.startsWith("~")) {
+		normalized = "/public" + normalized.slice(1);
+	}
 
-  // Handle relative paths
-  if (!normalized.startsWith("/")) {
-    if (context.workspace) {
-      normalized = context.workspace + "/" + normalized;
-    } else {
-      normalized = "/public/" + normalized;
-    }
-  }
+	// Handle relative paths
+	if (!normalized.startsWith("/")) {
+		if (context.workspace) {
+			normalized = context.workspace + "/" + normalized;
+		} else {
+			normalized = "/public/" + normalized;
+		}
+	}
 
-  // Resolve .. and .
-  normalized = resolvePath(normalized);
+	// Resolve .. and .
+	normalized = resolvePath(normalized);
 
-  return normalized;
+	return normalized;
 }
 
 /**
@@ -57,25 +57,25 @@ function normalizePath(path, context = {}) {
  * @returns {string}
  */
 function resolvePath(path) {
-  const isAbsolute = path.startsWith("/");
-  const hasTrailingSlash = path.length > 1 && path.endsWith("/");
-  const parts = path.split("/");
-  const resolved = [];
+	const isAbsolute = path.startsWith("/");
+	const hasTrailingSlash = path.length > 1 && path.endsWith("/");
+	const parts = path.split("/");
+	const resolved = [];
 
-  for (const part of parts) {
-    if (part === "..") {
-      resolved.pop();
-    } else if (part === "." || part === "") {
-      continue;
-    } else {
-      resolved.push(part);
-    }
-  }
+	for (const part of parts) {
+		if (part === "..") {
+			resolved.pop();
+		} else if (part === "." || part === "") {
+			continue;
+		} else {
+			resolved.push(part);
+		}
+	}
 
-  let result = resolved.join("/");
-  if (isAbsolute) result = "/" + result;
-  if (hasTrailingSlash && result !== "/") result += "/";
-  return result || "/";
+	let result = resolved.join("/");
+	if (isAbsolute) result = "/" + result;
+	if (hasTrailingSlash && result !== "/") result += "/";
+	return result || "/";
 }
 
 /**
@@ -85,18 +85,22 @@ function resolvePath(path) {
  * @returns {"internal" | "external" | "sdcard" | "content" | "proot"}
  */
 function getStorageType(path) {
-  if (!path) return "internal";
+	if (!path) return "internal";
 
-  if (path.startsWith("content://")) return "content";
-  if (path.startsWith("/sdcard")) return "sdcard";
-  if (path.startsWith("/storage/")) return "external";
+	if (path.startsWith("content://")) return "content";
+	if (path.startsWith("/sdcard")) return "sdcard";
+	if (path.startsWith("/storage/")) return "external";
 
-  // proot-mapped paths
-  if (path.startsWith("/public") || path.startsWith("/home") || path.startsWith("/root")) {
-    return "proot";
-  }
+	// proot-mapped paths
+	if (
+		path.startsWith("/public") ||
+		path.startsWith("/home") ||
+		path.startsWith("/root")
+	) {
+		return "proot";
+	}
 
-  return "internal";
+	return "internal";
 }
 
 /**
@@ -107,25 +111,27 @@ function getStorageType(path) {
  * @returns {{ safe: boolean, reason?: string }}
  */
 function isPathSafe(path) {
-  const type = getStorageType(path);
+	const type = getStorageType(path);
 
-  if (type === "sdcard" || type === "external") {
-    return {
-      safe: false,
-      reason: `Path is on external storage (${type}). ` +
-        "Files may not have correct permissions for execution. " +
-        "Move to /home/ or /public/ for reliable operation.",
-    };
-  }
+	if (type === "sdcard" || type === "external") {
+		return {
+			safe: false,
+			reason:
+				`Path is on external storage (${type}). ` +
+				"Files may not have correct permissions for execution. " +
+				"Move to /home/ or /public/ for reliable operation.",
+		};
+	}
 
-  if (type === "content") {
-    return {
-      safe: false,
-      reason: "Content URI requires SAF (Storage Access Framework) for write access.",
-    };
-  }
+	if (type === "content") {
+		return {
+			safe: false,
+			reason:
+				"Content URI requires SAF (Storage Access Framework) for write access.",
+		};
+	}
 
-  return { safe: true };
+	return { safe: true };
 }
 
 /**
@@ -137,29 +143,29 @@ function isPathSafe(path) {
  * @returns {string} proot-mapped path
  */
 function toProotPath(acodePath, env = {}) {
-  const prefix = env.PREFIX || "";
+	const prefix = env.PREFIX || "";
 
-  // /public/ in proot maps to $PREFIX/public/ on the host
-  if (acodePath.startsWith("/public/")) {
-    return prefix + acodePath;
-  }
+	// /public/ in proot maps to $PREFIX/public/ on the host
+	if (acodePath.startsWith("/public/")) {
+		return prefix + acodePath;
+	}
 
-  // /home/ in proot also maps to $PREFIX/public/ (see init-sandbox.sh)
-  if (acodePath.startsWith("/home/")) {
-    return prefix + "/public" + acodePath.slice(5);
-  }
+	// /home/ in proot also maps to $PREFIX/public/ (see init-sandbox.sh)
+	if (acodePath.startsWith("/home/")) {
+		return prefix + "/public" + acodePath.slice(5);
+	}
 
-  // /root/ also maps to $PREFIX/public/
-  if (acodePath.startsWith("/root/")) {
-    return prefix + "/public" + acodePath.slice(5);
-  }
+	// /root/ also maps to $PREFIX/public/
+	if (acodePath.startsWith("/root/")) {
+		return prefix + "/public" + acodePath.slice(5);
+	}
 
-  // Already an absolute host path
-  if (prefix && acodePath.startsWith(prefix)) {
-    return acodePath;
-  }
+	// Already an absolute host path
+	if (prefix && acodePath.startsWith(prefix)) {
+		return acodePath;
+	}
 
-  return acodePath;
+	return acodePath;
 }
 
 /**
@@ -170,20 +176,20 @@ function toProotPath(acodePath, env = {}) {
  * @returns {string}
  */
 function fromProotPath(prootPath, env = {}) {
-  const prefix = env.PREFIX || "";
+	const prefix = env.PREFIX || "";
 
-  if (prefix && prootPath.startsWith(prefix + "/public/")) {
-    return prootPath.slice(prefix.length);
-  }
+	if (prefix && prootPath.startsWith(prefix + "/public/")) {
+		return prootPath.slice(prefix.length);
+	}
 
-  return prootPath;
+	return prootPath;
 }
 
 export {
-  normalizePath,
-  resolvePath,
-  getStorageType,
-  isPathSafe,
-  toProotPath,
-  fromProotPath,
+	fromProotPath,
+	getStorageType,
+	isPathSafe,
+	normalizePath,
+	resolvePath,
+	toProotPath,
 };
