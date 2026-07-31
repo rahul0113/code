@@ -319,6 +319,70 @@
   }
 }
 
+// ── Mobile optimizations ────────────────────────────────────────
+@media (max-width: 480px) {
+  .ai-chat {
+    &__status {
+      padding: 4px 8px;
+      font-size: 10px;
+    }
+
+    &__messages {
+      padding: 6px;
+      gap: 6px;
+    }
+
+    &__message {
+      padding: 6px 8px;
+      font-size: 12px;
+
+      &--user {
+        max-width: 90%;
+      }
+
+      &--assistant {
+        max-width: 98%;
+      }
+    }
+
+    &__input-area {
+      padding: 6px;
+      padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    }
+
+    &__input {
+      min-height: 44px; // Minimum touch target
+      font-size: 16px; // Prevent iOS zoom on focus
+      padding: 10px 12px;
+    }
+
+    &__send-btn,
+    &__cancel-btn {
+      width: 40px; // Minimum touch target (44px recommended)
+      height: 40px;
+      font-size: 18px;
+    }
+
+    &__patch-actions {
+      gap: 6px;
+    }
+
+    &__patch-accept,
+    &__patch-reject {
+      padding: 8px 16px;
+      min-height: 44px;
+      font-size: 14px;
+    }
+  }
+}
+
+// Safe area for notched devices
+.ai-chat {
+  &__input-area {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 // ── Animations ──────────────────────────────────────────────────
 
 @keyframes ai-pulse {

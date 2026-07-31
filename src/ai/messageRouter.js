@@ -8,9 +8,9 @@
  * - cancel: Cancel running operations
  */
 
-const { parseStreamLine } = require("../lib/claude/cliParser");
-const { ToolExecutor } = require("./toolExecutor");
-const { ContextCollector } = require("./contextCollector");
+import { parseStreamLine } from "../lib/claude/cliParser";
+import { ToolExecutor } from "./toolExecutor";
+import { ContextCollector } from "./contextCollector";
 
 function createMessageRouter({ openClaude, patchManager }) {
   let cancelRef = { cancelled: false };
@@ -162,6 +162,13 @@ function createMessageRouter({ openClaude, patchManager }) {
       }
 
       openClaude.process.stdout.on("data", onData);
+
+      // Also handle process close (e.g. after kill from cancel)
+      if (openClaude.process.on) {
+        openClaude.process.on("close", () => {
+          if (!resolved) finish();
+        });
+      }
     });
   }
 
@@ -288,4 +295,4 @@ function createMessageRouter({ openClaude, patchManager }) {
   return { handleMessage };
 }
 
-module.exports = { createMessageRouter };
+export { createMessageRouter };

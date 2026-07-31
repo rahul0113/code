@@ -5,8 +5,8 @@
  * captures stdout/stderr, and streams output back to WebSocket clients.
  */
 
-const { spawn } = require("child_process");
-const { parseCliOutput } = require("../lib/claude/cliParser");
+import { spawn } from "child_process";
+import { parseCliOutput } from "../lib/claude/cliParser.js";
 
 const CLAUDE_CMD = "claude";
 const CLAUDE_ARGS = ["--output-format", "stream-json"];
@@ -132,4 +132,4 @@ class OpenClaudeManager {
   }
 }
 
-module.exports = { OpenClaudeManager };
+export { OpenClaudeManager };

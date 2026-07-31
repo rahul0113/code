@@ -5,10 +5,10 @@
  * All file operations validate path safety and workspace boundaries.
  */
 
-const fs = require("fs");
-const path = require("path");
-const { execSync } = require("child_process");
-const { isPathSafe } = require("../lib/claude/storage");
+import fs from "fs";
+import path from "path";
+import { execSync } from "child_process";
+import { isPathSafe } from "../lib/claude/storage.js";
 
 const MAX_READ_SIZE = 1048576; // 1MB
 const MAX_LIST_ENTRIES = 500;
@@ -187,4 +187,4 @@ class ToolExecutor {
   }
 }
 
-module.exports = { ToolExecutor };
+export { ToolExecutor };

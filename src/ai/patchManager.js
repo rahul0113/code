@@ -5,9 +5,9 @@
  * This module applies them to the actual filesystem.
  */
 
-const fs = require("fs");
-const path = require("path");
-const { isPathSafe } = require("../lib/claude/storage");
+import fs from "fs";
+import path from "path";
+import { isPathSafe } from "../lib/claude/storage.js";
 
 const ALLOWED_ROOTS = ["/public", "/home", "/root"];
 
@@ -81,4 +81,4 @@ class PatchManager {
   }
 }
 
-module.exports = { PatchManager };
+export { PatchManager };

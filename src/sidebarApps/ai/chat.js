@@ -122,6 +122,15 @@ class AIChat {
 		aiWebSocket.onDisconnect(this._onDisconnect);
 		aiWebSocket.onConnect(this._onConnect);
 
+		// Handle virtual keyboard on mobile — scroll input into view when focused
+		if (this._inputEl) {
+			this._inputEl.addEventListener("focus", () => {
+				setTimeout(() => {
+					this._inputEl?.scrollIntoView({ behavior: "smooth", block: "end" });
+				}, 300); // Delay for keyboard animation
+			});
+		}
+
 		// Auto-connect
 		aiWebSocket.connect()
 			.then(() => {

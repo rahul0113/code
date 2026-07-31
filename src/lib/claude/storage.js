@@ -179,7 +179,7 @@ function fromProotPath(prootPath, env = {}) {
   return prootPath;
 }
 
-module.exports = {
+export {
   normalizePath,
   resolvePath,
   getStorageType,

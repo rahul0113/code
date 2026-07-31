@@ -15,6 +15,12 @@ const IGNORE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".ico", ".woff", ".w
 class ContextCollector {
   constructor(rootDir = "/public") {
     this.rootDir = rootDir;
+    /** @type {{tree: string, timestamp: number}|null} */
+    this._treeCache = null;
+    /** @type {Map<string, {content: string, timestamp: number}>} */
+    this._fileCache = new Map();
+    /** @type {number} */
+    this._cacheTtlMs = 60000; // 1 minute
   }
 
   /**
@@ -56,7 +62,17 @@ class ContextCollector {
 
   _collectDirectory(absolutePath) {
     const files = [];
-    const tree = this._buildTree(absolutePath, 0, 2);
+    const now = Date.now();
+
+    // Use cached tree if fresh
+    let tree;
+    if (this._treeCache && (now - this._treeCache.timestamp) < this._cacheTtlMs) {
+      tree = this._treeCache.tree;
+    } else {
+      tree = this._buildTree(absolutePath, 0, 2);
+      this._treeCache = { tree, timestamp: now };
+    }
+
     let totalSize = 0;
 
     const walk = (dir, depth = 0) => {
@@ -84,7 +100,15 @@ class ContextCollector {
           if (IGNORE_EXTENSIONS.includes(ext)) continue;
 
           try {
-            const content = fs.readFileSync(fullPath, "utf8");
+            // Use file cache if fresh
+            let content;
+            const cached = this._fileCache.get(fullPath);
+            if (cached && (now - cached.timestamp) < this._cacheTtlMs) {
+              content = cached.content;
+            } else {
+              content = fs.readFileSync(fullPath, "utf8");
+              this._fileCache.set(fullPath, { content, timestamp: now });
+            }
             if (content.length > 10000) continue; // Skip very large files
 
             const relativePath = path.relative(this.rootDir, fullPath);
@@ -152,6 +176,14 @@ class ContextCollector {
 
     return parts.join("\n\n");
   }
+
+  /**
+   * Invalidate cached data (call after file changes).
+   */
+  invalidateCache() {
+    this._treeCache = null;
+    this._fileCache.clear();
+  }
 }
 
-module.exports = { ContextCollector };
+export { ContextCollector };

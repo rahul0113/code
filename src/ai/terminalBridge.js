@@ -7,7 +7,7 @@
  * - Shutting down when terminal closes
  */
 
-const { createServer } = require("./server");
+import { createServer } from "./server.js";
 
 class TerminalBridge {
   constructor() {
@@ -56,4 +56,4 @@ class TerminalBridge {
   }
 }
 
-module.exports = { TerminalBridge };
+export { TerminalBridge };

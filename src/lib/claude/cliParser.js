@@ -16,7 +16,7 @@
  *   { type: "done" }
  */
 
-const fs = require("fs");
+import fs from "fs";
 
 /**
  * Detect if a line starts a tool call block.
@@ -372,7 +372,7 @@ function parseStreamLine(line) {
   return null;
 }
 
-module.exports = {
+export {
   parseCliOutput,
   parseDiffContent,
   createStreamingParser,

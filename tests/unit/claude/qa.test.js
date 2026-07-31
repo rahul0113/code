@@ -333,8 +333,6 @@ describe("QA-05: WebSocket Protocol Compliance", () => {
 
 // ── QA-06: File Structure Compliance ────────────────────────────
 describe("QA-06: File Structure Compliance", () => {
-  const fs = require("fs");
-  const path = require("path");
 
   const REQUIRED_FILES = [
     "src/plugins/claude/plugin.xml",
@@ -371,7 +369,6 @@ describe("QA-06: File Structure Compliance", () => {
 
 // ── QA-07: CI/CD Pipeline Validation ────────────────────────────
 describe("QA-07: CI/CD Pipeline Validation", () => {
-  const fs = require("fs");
 
   it("ci.yml exists and is valid YAML", async () => {
     const content = fs.readFileSync(".github/workflows/ci.yml", "utf8");
@@ -421,13 +418,13 @@ describe("QA-08: Code Quality Checks", () => {
 
   it("cliParser.js has no syntax errors", () => {
     const content = fs.readFileSync("src/lib/claude/cliParser.js", "utf8");
-    expect(content).toContain("module.exports");
+    expect(content).toContain("export");
     expect(content).toContain("function");
   });
 
   it("storage.js has no syntax errors", () => {
     const content = fs.readFileSync("src/lib/claude/storage.js", "utf8");
-    expect(content).toContain("module.exports");
+    expect(content).toContain("export");
     expect(content).toContain("function");
   });
 
@@ -443,7 +440,6 @@ describe("QA-08: Code Quality Checks", () => {
 
 // ── QA-09: Documentation Compliance ─────────────────────────────
 describe("QA-09: Documentation Compliance", () => {
-  const fs = require("fs");
 
   it("CONTEXT.md contains all required sections", () => {
     const content = fs.readFileSync("CONTEXT.md", "utf8");

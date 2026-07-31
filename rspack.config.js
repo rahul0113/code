@@ -124,6 +124,12 @@ module.exports = (env, options) => {
 
   const main = {
     mode,
+    externals: {
+      fs: 'commonjs fs',
+      path: 'commonjs path',
+      child_process: 'commonjs child_process',
+      crypto: 'commonjs crypto',
+    },
     node: {
       __dirname: false,
       __filename: false,

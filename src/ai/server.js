@@ -5,11 +5,11 @@
  * Bridges Acode WebView ↔ OpenClaude CLI via WebSocket.
  */
 
-const crypto = require("crypto");
-const WebSocket = require("ws");
-const { createMessageRouter } = require("./messageRouter");
-const { OpenClaudeManager } = require("./openClaudeManager");
-const { PatchManager } = require("./patchManager");
+import crypto from "crypto";
+import WebSocket from "ws";
+import { createMessageRouter } from "./messageRouter.js";
+import { OpenClaudeManager } from "./openClaudeManager.js";
+import { PatchManager } from "./patchManager.js";
 
 const DEFAULT_PORT = 9876;
 
@@ -127,4 +127,4 @@ function createServer(options) {
   return new AIServer(options);
 }
 
-module.exports = { AIServer, createServer };
+export { AIServer, createServer };

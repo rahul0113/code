@@ -1,4 +1,5 @@
 import { runAceCompatibilityTests } from "./ace.test";
+import { runAiTests } from "./ai.tests";
 import { runCodeMirrorTests } from "./editor.tests";
 import { runExecutorTests } from "./exec.tests";
 import { runFsTests } from "./fs.tests";
@@ -12,6 +13,7 @@ import { runUrlTests } from "./url.tests";
  */
 export const testDefinitions = [
 	runSanityTests,
+	runAiTests,
 	runExecutorTests,
 	runUrlTests,
 	runFsTests,
