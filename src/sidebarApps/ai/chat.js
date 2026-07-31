@@ -358,12 +358,12 @@ class AIChat {
 		`;
 
 		el.querySelector(".ai-chat__patch-accept").addEventListener("click", () => {
-			aiWebSocket.send({ type: "apply_patch", patchId: msg.patchId });
+			aiWebSocket.send("apply_patch", { patchId: msg.patchId });
 			el.querySelector(".ai-chat__patch-actions").innerHTML = '<span class="ai-chat__patch-status">Accepted</span>';
 		});
 
 		el.querySelector(".ai-chat__patch-reject").addEventListener("click", () => {
-			aiWebSocket.send({ type: "reject_patch", patchId: msg.patchId });
+			aiWebSocket.send("reject_patch", { patchId: msg.patchId });
 			el.querySelector(".ai-chat__patch-actions").innerHTML = '<span class="ai-chat__patch-status">Rejected</span>';
 		});
 

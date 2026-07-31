@@ -59,7 +59,8 @@ class ToolExecutor {
 
   _isWithinWorkspace(filePath) {
     const resolved = path.resolve(filePath);
-    return resolved.startsWith(this.workspacePath);
+    const ws = this.workspacePath;
+    return resolved === ws || resolved.startsWith(ws + "/");
   }
 
   _validatePath(filePath) {
