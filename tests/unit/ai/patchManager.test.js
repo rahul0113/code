@@ -4,7 +4,8 @@ import { PatchManager } from "ai/patchManager";
 describe("PatchManager", () => {
   it("applies patch with null old content (new file)", () => {
     const mgr = new PatchManager();
-    const testPath = "/public/.test_patch_file.js";
+    // Use process.cwd() so the path exists in both local and CI environments
+    const testPath = require("path").join(process.cwd(), ".test_patch_file.js");
     try {
       const result = mgr.apply({
         filePath: testPath,
