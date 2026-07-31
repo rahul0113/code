@@ -5,8 +5,8 @@
  * giving OpenClaude context about the project structure and code.
  */
 
-const fs = require("fs");
-const path = require("path");
+import fs from "fs";
+import path from "path";
 
 const MAX_CONTEXT_SIZE = 50000; // ~50KB of context text
 const IGNORE_DIRS = ["node_modules", ".git", "platforms", "plugins", "build", "dist", ".cache"];
