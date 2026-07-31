@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<plugin xmlns="http://apache.org/cordova/ns/plugins/1.0" xmlns:android="http://schemas.android.com/apk/res/android" id="com.foxdebug.acode.claude" version="0.1.0">
+    <name>Claude</name>
+    <description>Acode integration for OpenClaude AI coding assistant</description>
+
+    <js-module name="Claude" src="www/Claude.js">
+        <clobbers target="window.Claude" />
+    </js-module>
+
+    <platform name="android">
+        <config-file parent="/*" target="res/xml/config.xml">
+            <feature name="Claude">
+                <param name="android-package" value="com.foxdebug.acode.claude.ClaudePlugin" />
+            </feature>
+        </config-file>
+
+        <source-file src="src/android/ClaudePlugin.java" target-dir="src/com/foxdebug/acode/claude" />
+    </platform>
+</plugin>
