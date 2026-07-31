@@ -313,7 +313,8 @@ describe("Integration: Conversation Persistence", () => {
 describe("Integration: Context Collector Caching", () => {
   it("caches tree building results", async () => {
     const { ContextCollector } = await import("ai/contextCollector");
-    const collector = new ContextCollector("/public/Acode/src/ai");
+    const rootDir = process.cwd();
+    const collector = new ContextCollector(rootDir);
 
     const result1 = collector.collect(".");
     const result2 = collector.collect(".");
@@ -326,7 +327,8 @@ describe("Integration: Context Collector Caching", () => {
 
   it("invalidates cache on demand", async () => {
     const { ContextCollector } = await import("ai/contextCollector");
-    const collector = new ContextCollector("/public/Acode/src/ai");
+    const rootDir = process.cwd();
+    const collector = new ContextCollector(rootDir);
 
     collector.collect(".");
     expect(collector._treeCache).not.toBeNull();
