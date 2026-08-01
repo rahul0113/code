@@ -125,10 +125,9 @@ module.exports = (env, options) => {
   const main = {
     mode,
     externals: {
-      fs: 'commonjs fs',
-      path: 'commonjs path',
-      child_process: 'commonjs child_process',
-      crypto: 'commonjs crypto',
+      // Stub out Node-only modules so they resolve to empty objects in the browser
+      // instead of emitting require() calls that crash at runtime.
+      // resolve.fallback below handles path with a browser polyfill.
     },
     node: {
       __dirname: false,
@@ -174,7 +173,9 @@ module.exports = (env, options) => {
     resolve: {
       extensions: ['.ts', '.tsx', '.js', '.mjs', '.json'],
       fallback: {
+        fs: false,
         path: require.resolve('path-browserify'),
+        child_process: false,
         crypto: false,
       },
       modules: ['node_modules', 'src'],
