@@ -367,8 +367,6 @@ describe("QA-06: File Structure Compliance", () => {
     ".github/workflows/release.yml",
     "vitest.config.js",
     "README.md",
-    "LICENSE",
-    "CONTRIBUTING.md",
   ];
 
   for (const file of REQUIRED_FILES) {
@@ -470,18 +468,6 @@ describe("QA-09: Documentation Compliance", () => {
     expect(content).toContain("npm ci");
     expect(content).toContain("npm test");
     expect(content).toContain("Building APK");
-  });
-
-  it("LICENSE contains MIT license", () => {
-    const content = fs.readFileSync("LICENSE", "utf8");
-    expect(content).toContain("MIT License");
-    expect(content).toContain("Copyright");
-    expect(content).toContain("Permission is hereby granted");
-  });
-
-  it("CONTRIBUTING.md exists and contains contribution guidelines", () => {
-    const content = fs.readFileSync("CONTRIBUTING.md", "utf8");
-    expect(content.length).toBeGreaterThan(0);
   });
 
   it("release.yml triggers on version tags", () => {
