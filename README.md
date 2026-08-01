@@ -161,12 +161,3 @@ This project uses GitHub Actions for continuous integration and release automati
 
 See `.github/workflows/` for the full pipeline configuration.
 
-## License
-
-MIT License — Copyright (c) 2020 Foxdebug (Ajit Kumar)
-
-See [license.txt](license.txt) for the full license text.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and contribution guidelines.
